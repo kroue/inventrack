@@ -1,0 +1,60 @@
+<div class="p-8 h-full w-full overflow-y-auto bg-white custom-scrollbar page-enter">
+
+  <div class="flex justify-between items-center mb-8 animate-fade-in-up">
+    <h2 class="text-xl font-semibold text-gray-800">Users</h2>
+
+    <div class="relative w-[300px]">
+      <input
+        type="text"
+        class="w-full bg-[#F2F2F2] border border-transparent rounded-full py-2.5 pl-5 pr-10 text-sm text-gray-600 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-200 focus:bg-white transition-all"
+        placeholder="search user"
+      >
+      <div class="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+        <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-[#F8F8F8] border border-gray-200 rounded-3xl p-8 shadow-sm card-hover animate-fade-in-up delay-100 w-full">
+
+    <!-- Table Header -->
+    <div class="grid grid-cols-5 text-xs font-semibold text-gray-400 uppercase tracking-widest pb-4 px-4 border-b border-gray-200">
+      <div class="col-span-1">Name</div>
+      <div class="col-span-2 text-center">Email</div>
+      <div class="col-span-1 text-center">Role</div>
+      <div class="col-span-1 text-center">Status</div>
+    </div>
+
+    <!-- Table Rows -->
+    @for (user of users; track user.name; let i = $index) {
+      <div class="grid grid-cols-5 items-center py-4 px-4 border-b border-gray-100 text-sm text-gray-700 table-row-hover rounded-xl animate-fade-in-up"
+           [ngStyle]="{'animation-delay': (100 + i * 60) + 'ms'}">
+        <div class="col-span-1 flex items-center space-x-2">
+          <div class="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-600 flex-shrink-0">
+            {{ user.name.charAt(0) }}
+          </div>
+          <span class="font-medium">{{ user.name }}</span>
+        </div>
+        <div class="col-span-2 text-center text-gray-500 text-xs">{{ user.email }}</div>
+        <div class="col-span-1 text-center">
+          <span class="px-2.5 py-0.5 text-[11px] font-medium rounded-full"
+            [ngClass]="user.role === 'Admin' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'">
+            {{ user.role }}
+          </span>
+        </div>
+        <div class="col-span-1 flex items-center justify-center space-x-2">
+          <div class="flex items-center">
+            <div class="w-1.5 h-1.5 rounded-full mr-1.5"
+              [ngClass]="user.status === 'Active' ? 'bg-green-500' : 'bg-gray-300'"></div>
+            <span [ngClass]="user.status === 'Active' ? 'text-green-700' : 'text-gray-400'">{{ user.status }}</span>
+          </div>
+          <button class="ml-2 p-1 rounded-full hover:bg-red-50 transition-colors group btn-press">
+            <svg class="w-3.5 h-3.5 text-gray-300 group-hover:text-red-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+          </button>
+        </div>
+      </div>
+    }
+  </div>
+</div>

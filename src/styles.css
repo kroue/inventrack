@@ -1,0 +1,254 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import 'tailwindcss';
+
+/* ========================
+   GLOBAL RESETS & FONT
+   ======================== */
+html, body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+app-root {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+
+/* Make all routed Angular component host elements fill the container */
+app-dashboard,
+app-inventory,
+app-users,
+app-procurement,
+app-stock-log,
+app-offline-sync,
+app-pos-checkout,
+app-login {
+  display: flex;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+* {
+  font-family: 'Inter', system-ui, sans-serif;
+  box-sizing: border-box;
+}
+
+/* ========================
+   SCROLLBARS
+   ======================== */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #D1D5DB;
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #9CA3AF;
+}
+
+/* ========================
+   ENTRANCE ANIMATIONS
+   ======================== */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.93);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Bar-grow for chart bars */
+@keyframes barGrow {
+  from { transform: scaleY(0); transform-origin: bottom; }
+  to   { transform: scaleY(1); transform-origin: bottom; }
+}
+
+/* Count-up shimmer on metric numbers */
+@keyframes shimmerPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.7; }
+}
+
+/* Progress bar fill */
+@keyframes progressFill {
+  from { width: 0; }
+  to   { width: var(--target-width); }
+}
+
+/* ========================
+   ANIMATION UTILITY CLASSES
+   ======================== */
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.animate-fade-in-left {
+  animation: fadeInLeft 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.animate-fade-in {
+  animation: fadeIn 0.35s ease both;
+}
+.animate-scale-in {
+  animation: scaleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.animate-slide-in-right {
+  animation: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.animate-bar-grow {
+  animation: barGrow 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Stagger delays */
+.delay-50  { animation-delay: 50ms;  }
+.delay-100 { animation-delay: 100ms; }
+.delay-150 { animation-delay: 150ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-250 { animation-delay: 250ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+.delay-500 { animation-delay: 500ms; }
+.delay-600 { animation-delay: 600ms; }
+
+/* ========================
+   SIDEBAR ACTIVE LINK
+   ======================== */
+.nav-link {
+  position: relative;
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+.nav-link::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(240,240,240,0.7));
+  border-radius: 9999px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.nav-link:hover::before {
+  opacity: 1;
+}
+.nav-link.active-link {
+  box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+  background: #fff;
+  font-weight: 600;
+}
+.nav-link.active-link::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 5px;
+  height: 5px;
+  background: #374151;
+  border-radius: 9999px;
+}
+
+/* ========================
+   CARD HOVER LIFT
+   ======================== */
+.card-hover {
+  transition: box-shadow 0.25s ease, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.card-hover:hover {
+  box-shadow: 0 8px 30px rgba(0,0,0,0.09);
+  transform: translateY(-3px);
+}
+
+/* ========================
+   BUTTON INTERACTIONS
+   ======================== */
+.btn-press:active {
+  transform: scale(0.96);
+}
+
+/* ========================
+   PAGE TRANSITION WRAPPER
+   ======================== */
+.page-enter {
+  animation: fadeInUp 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ========================
+   TABLE ROW HOVER
+   ======================== */
+.table-row-hover {
+  transition: background 0.15s ease;
+}
+.table-row-hover:hover {
+  background: #F9FAFB;
+}
+
+/* ========================
+   SKELETON SHIMMER (optional future use)
+   ======================== */
+@keyframes skeletonShimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 800px 100%;
+  animation: skeletonShimmer 1.4s ease infinite;
+}
+
+/* ========================
+   CHART BAR FILL ANIMATION
+   ======================== */
+.bar-inner {
+  transform-origin: bottom;
+  animation: barGrow 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}

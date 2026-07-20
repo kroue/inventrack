@@ -1,0 +1,131 @@
+<div class="min-h-screen w-full flex items-center justify-center bg-[#EFEFEF] page-enter">
+
+  <div class="w-full max-w-md mx-4">
+
+    <!-- Logo / Brand -->
+    <div class="text-center mb-8 animate-fade-in-up">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gray-800 shadow-lg mb-4">
+        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+            d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+        </svg>
+      </div>
+      <h1 class="text-2xl font-bold text-gray-900 tracking-tight">InvenTrack</h1>
+      <p class="text-sm text-gray-500 mt-1">Sign in to your account</p>
+    </div>
+
+    <!-- Card -->
+    <div class="bg-white rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.1)] p-8 animate-fade-in-up delay-100">
+
+      <!-- Form -->
+      <form (ngSubmit)="submit()" #loginForm="ngForm" class="space-y-4">
+
+        <!-- Email -->
+        <div class="animate-fade-in-up delay-100">
+          <label class="block text-xs font-semibold text-gray-600 mb-1.5">Email</label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+              <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+              </svg>
+            </div>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              [(ngModel)]="email"
+              autocomplete="email"
+              placeholder="you@example.com"
+              class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl py-3 pl-10 pr-4 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:bg-white transition-all"
+            >
+          </div>
+        </div>
+
+        <!-- Password -->
+        <div class="animate-fade-in-up delay-150">
+          <label class="block text-xs font-semibold text-gray-600 mb-1.5">Password</label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+              <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+              </svg>
+            </div>
+            <input
+              [type]="showPass ? 'text' : 'password'"
+              id="password"
+              name="password"
+              [(ngModel)]="password"
+              autocomplete="current-password"
+              placeholder="••••••••"
+              class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl py-3 pl-10 pr-11 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:bg-white transition-all"
+            >
+            <button
+              type="button"
+              (click)="showPass = !showPass"
+              class="absolute inset-y-0 right-3 flex items-center px-1 text-gray-400 hover:text-gray-700 transition-colors">
+              @if (showPass) {
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                </svg>
+              } @else {
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+              }
+            </button>
+          </div>
+        </div>
+
+        <!-- Error message -->
+        @if (error()) {
+          <div class="flex items-center gap-2 bg-red-50 border border-red-100 rounded-xl px-4 py-3 animate-fade-in">
+            <svg class="w-4 h-4 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <p class="text-xs text-red-600 font-medium">{{ error() }}</p>
+          </div>
+        }
+
+        <!-- Submit -->
+        <button
+          type="submit"
+          [disabled]="loading()"
+          class="w-full py-3.5 rounded-xl text-sm font-semibold transition-all duration-200 btn-press mt-2"
+          [ngClass]="loading() ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-gray-800 text-white hover:bg-black shadow-md hover:shadow-lg'">
+          @if (loading()) {
+            <span class="flex items-center justify-center gap-2">
+              <svg class="animate-spin w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+              </svg>
+              Signing in…
+            </span>
+          } @else {
+            Sign In
+          }
+        </button>
+      </form>
+
+      <!-- Role info -->
+      <div class="mt-6 bg-[#F8F8F8] rounded-2xl p-4 animate-fade-in-up delay-200">
+        <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Access Levels</p>
+        <div class="space-y-1.5">
+          <div class="flex items-center gap-2 text-xs text-gray-600">
+            <span class="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0"></span>
+            <span class="font-medium w-14">Admin</span>
+            <span class="text-gray-400">Full access — dashboard, inventory, users, procurement</span>
+          </div>
+          <div class="flex items-center gap-2 text-xs text-gray-600">
+            <span class="w-1.5 h-1.5 rounded-full bg-purple-500 flex-shrink-0"></span>
+            <span class="font-medium w-14">Cashier</span>
+            <span class="text-gray-400">POS checkout only</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="text-center text-[11px] text-gray-400 mt-6 animate-fade-in delay-300">
+      Al-Bazar Enterprises · InvenTrack v1.0
+    </p>
+  </div>
+</div>

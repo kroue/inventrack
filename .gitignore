@@ -1,0 +1,90 @@
+# See https://docs.github.com/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+
+# Compiled output
+/dist
+/tmp
+/out-tsc
+/bazel-out
+
+# Node
+/node_modules
+npm-debug.log
+yarn-error.log
+
+# IDEs and editors
+.idea/
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# Visual Studio Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/extensions.json
+!.vscode/mcp.json
+.history/*
+
+# Miscellaneous
+/.angular/cache
+.sass-cache/
+/connect.lock
+/coverage
+/libpeerconnection.log
+testem.log
+/typings
+__screenshots__/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# ──────────────────────────────────────────
+# SECURITY — Environment & Secrets
+# ──────────────────────────────────────────
+
+# Environment variable files (NEVER commit real .env files)
+.env
+.env.*
+!.env.example
+
+# Angular environment files with real secrets (only prod should be excluded)
+src/environments/environment.prod.ts
+
+# Cloud provider credentials
+.aws/
+.gcp/
+.azure/
+gcloud/
+
+# Service account & credential JSON files
+*service-account*.json
+*credentials*.json
+*serviceAccountKey*.json
+*firebase-adminsdk*.json
+
+# Private keys & certificates
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+
+# Database dumps & local DB files
+*.sql
+*.dump
+*.sqlite
+*.db
+
+# Log files (may contain sensitive runtime data)
+*.log
+logs/
+
+# Backup & swap files
+*.bak
+*.swp
+*.tmp

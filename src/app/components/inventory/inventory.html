@@ -1,0 +1,90 @@
+<div class="flex-1 flex flex-col h-full overflow-hidden p-6 page-enter w-full">
+
+  <!-- Search Bar -->
+  <div class="relative w-full max-w-3xl mb-7 animate-fade-in-up delay-50">
+    <input
+      type="text"
+      [(ngModel)]="searchQuery"
+      class="w-full bg-[#F2F2F2] border border-transparent rounded-full py-3.5 pl-6 pr-12 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:bg-white transition-all shadow-sm"
+      placeholder="search by product name or category..."
+    >
+    <div class="absolute inset-y-0 right-4 flex items-center pointer-events-none">
+      <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+    </div>
+  </div>
+
+  <!-- Product Grid -->
+  <div class="flex-1 overflow-y-auto custom-scrollbar pb-10">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pr-2">
+
+      <!-- Add Product Card -->
+      <div class="bg-[#F8F8F8] border-2 border-dashed border-gray-200 rounded-3xl h-[260px] flex items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-all duration-300 group animate-scale-in">
+        <div class="flex flex-col items-center text-gray-400 group-hover:text-gray-600 transition-colors">
+          <svg class="w-9 h-9 mb-2 group-hover:scale-110 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v16m8-8H4"></path>
+          </svg>
+          <span class="text-xs font-medium">Add Product</span>
+        </div>
+      </div>
+
+      @for (product of filteredProducts; track product.product_id; let i = $index) {
+        <div class="bg-[#F8F8F8] border border-gray-200 rounded-3xl p-4 flex flex-col h-[260px] relative group card-hover animate-scale-in"
+             [ngStyle]="{'animation-delay': (i * 60) + 'ms'}">
+
+          <!-- Image Placeholder -->
+          <div class="bg-gradient-to-br from-white to-gray-100 rounded-2xl h-[115px] w-full shadow-sm mb-3 flex items-center justify-center overflow-hidden">
+            <svg class="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+            </svg>
+          </div>
+
+          <div class="flex-1 flex flex-col">
+            <div class="flex justify-between items-start">
+              <div class="flex-1 pr-2">
+                <h3 class="font-medium text-[14px] text-gray-800 leading-tight group-hover:text-gray-900">{{ product.product_name }}</h3>
+                <p class="text-[11px] text-gray-400 mt-0.5">{{ product.category_name }}</p>
+              </div>
+              <span class="w-2.5 h-2.5 rounded-full block shadow-sm flex-shrink-0 mt-0.5"
+                [ngClass]="{
+                  'bg-green-400': product.status === 'Available',
+                  'bg-yellow-400': product.status === 'Low Stock',
+                  'bg-red-400': product.status === 'Out of Stock'
+                }"></span>
+            </div>
+
+            <div class="mt-auto flex justify-between items-end">
+              <span class="text-[18px] font-semibold text-gray-900">₱{{ product.price | number:'1.2-2' }}</span>
+              <div class="bg-white border border-gray-200 shadow-sm rounded-full px-3 py-1 text-[10px] font-medium"
+                [ngClass]="{
+                  'text-gray-600': product.status === 'Available',
+                  'text-yellow-600': product.status === 'Low Stock',
+                  'text-red-500': product.status === 'Out of Stock'
+                }">
+                {{ stockMap[product.product_id] }} in stock
+              </div>
+            </div>
+          </div>
+
+          <!-- Hover Action Buttons -->
+          <div class="absolute top-4 right-4 flex space-x-1 opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all duration-200">
+            <button class="bg-white rounded-full p-1.5 shadow-md border border-gray-100 hover:bg-gray-50 transition-colors btn-press" (click)="$event.stopPropagation()">
+              <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+            </button>
+            <button class="bg-white rounded-full p-1.5 shadow-md border border-gray-100 hover:bg-red-50 transition-colors btn-press" (click)="$event.stopPropagation()">
+              <svg class="w-3.5 h-3.5 text-gray-400 hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            </button>
+          </div>
+        </div>
+      }
+
+      @if (filteredProducts.length === 0) {
+        <div class="col-span-full flex flex-col items-center justify-center py-20 text-gray-400 animate-fade-in">
+          <svg class="w-12 h-12 mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+          <p class="text-sm font-medium">No products found</p>
+        </div>
+      }
+    </div>
+  </div>
+</div>

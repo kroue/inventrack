@@ -1,0 +1,86 @@
+<!-- Full-screen shell: show sidebar only when authenticated -->
+<div class="flex h-screen w-full bg-white text-gray-800 overflow-hidden">
+
+  @if (auth.isLoggedIn()) {
+    <!-- Sidebar — with stagger entrance -->
+    <aside class="w-[260px] flex-shrink-0 bg-[#E5E5E5] flex flex-col relative border-r border-gray-200 animate-fade-in-left">
+
+      <!-- User avatar + info -->
+      <div class="p-6 flex items-start space-x-3 mt-10 animate-fade-in-up delay-100">
+        <div class="relative flex-shrink-0">
+          <div class="w-16 h-16 rounded-full bg-white shadow-md flex items-center justify-center text-xl font-semibold text-gray-600">
+            {{ auth.currentUser()?.displayName?.charAt(0) ?? 'U' }}{{ (auth.currentUser()?.displayName?.split(' ') ?? [])[1]?.charAt(0) ?? '' }}
+          </div>
+          <span class="absolute bottom-0 right-0 w-4 h-4 bg-green-400 border-2 border-[#E5E5E5] rounded-full"></span>
+        </div>
+        <div class="flex flex-col pt-1 relative w-full">
+          <span class="font-semibold text-[15px] leading-tight text-gray-900">{{ auth.currentUser()?.displayName }}</span>
+          <span class="text-[11px] text-gray-600 mt-0.5">{{ auth.currentUser()?.role }}</span>
+          <span class="text-[10px] text-gray-500 leading-tight mt-0.5">Al-Bazar Enterprises</span>
+        </div>
+      </div>
+
+      <!-- Navigation -->
+      <nav class="px-4 flex flex-col space-y-2.5 mt-4">
+
+        <!-- Admin-only routes -->
+        @if (auth.isAdmin()) {
+          <a routerLink="/dashboard" routerLinkActive="active-link"
+             class="nav-link block w-full text-center bg-white py-2.5 rounded-full shadow-sm text-sm font-medium text-gray-700 animate-fade-in-up delay-150 btn-press">
+            Dashboard
+          </a>
+          <a routerLink="/inventory" routerLinkActive="active-link"
+             class="nav-link block w-full text-center bg-white py-2.5 rounded-full shadow-sm text-sm font-medium text-gray-700 animate-fade-in-up delay-200 btn-press">
+            Inventory
+          </a>
+          <a routerLink="/users" routerLinkActive="active-link"
+             class="nav-link block w-full text-center bg-white py-2.5 rounded-full shadow-sm text-sm font-medium text-gray-700 animate-fade-in-up delay-250 btn-press">
+            User
+          </a>
+          <a routerLink="/procurement" routerLinkActive="active-link"
+             class="nav-link block w-full text-center bg-white py-2.5 rounded-full shadow-sm text-sm font-medium text-gray-700 animate-fade-in-up delay-300 btn-press">
+            Procurement
+          </a>
+          <a routerLink="/stock-log" routerLinkActive="active-link"
+             class="nav-link block w-full text-center bg-white py-2.5 rounded-full shadow-sm text-sm font-medium text-gray-700 animate-fade-in-up delay-400 btn-press">
+            Stock Log
+          </a>
+        }
+
+        <!-- Shared: POS is accessible by both roles -->
+        <a routerLink="/pos" routerLinkActive="active-link"
+           class="nav-link block w-full text-center bg-white py-2.5 rounded-full shadow-sm text-sm font-medium text-gray-700 animate-fade-in-up delay-200 btn-press">
+          POS Checkout
+        </a>
+
+      </nav>
+
+      <!-- Logout button -->
+      <div class="absolute bottom-6 left-4 right-4">
+        <button
+          (click)="logout()"
+          class="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-full bg-white/70 hover:bg-white border border-gray-200 shadow-sm text-sm font-medium text-gray-600 hover:text-gray-900 transition-all duration-200 btn-press group">
+          <svg class="w-4 h-4 text-gray-500 group-hover:text-gray-800 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+          </svg>
+          Log Out
+        </button>
+      </div>
+    </aside>
+  }
+
+  <!-- Main Content -->
+  <main class="flex-1 flex flex-col h-screen overflow-hidden">
+
+    @if (auth.isLoggedIn()) {
+      <!-- Topbar -->
+      <header class="h-[68px] bg-[#D3D3D3] flex items-center justify-center flex-shrink-0 border-b border-gray-300 animate-fade-in">
+        <h1 class="text-xl font-semibold text-gray-800 tracking-wide">InvenTrack</h1>
+      </header>
+    }
+
+    <div class="flex-1 flex overflow-hidden bg-white w-full">
+      <router-outlet></router-outlet>
+    </div>
+  </main>
+</div>

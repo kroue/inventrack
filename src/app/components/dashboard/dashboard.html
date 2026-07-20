@@ -1,0 +1,158 @@
+<div class="p-8 h-full w-full overflow-y-auto bg-white custom-scrollbar page-enter">
+
+  <!-- Top Metrics Row -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+
+    <!-- Total Revenue Card -->
+    <div class="bg-[#F8F8F8] border border-gray-200 rounded-3xl p-6 shadow-sm flex flex-col justify-center text-center card-hover animate-fade-in-up delay-50">
+      <h3 class="text-gray-500 font-medium text-sm uppercase tracking-wide">Total Revenue</h3>
+      <p class="text-gray-400 text-xs mt-1">May 14, 2026</p>
+      <div class="text-4xl font-semibold text-gray-900 mt-4 tabular-nums">
+        ₱ 12,450
+      </div>
+      <div class="mt-3 flex items-center justify-center text-xs text-green-600 font-medium">
+        <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>
+        +8.2% vs last week
+      </div>
+    </div>
+
+    <!-- Product Status Card -->
+    <div class="bg-[#F8F8F8] border border-gray-200 rounded-3xl p-6 shadow-sm flex flex-col justify-center card-hover animate-fade-in-up delay-150">
+      <div class="flex items-baseline mb-4">
+        <span class="text-2xl font-bold text-gray-900 mr-2">2,379</span>
+        <span class="text-gray-500 font-medium text-sm">Products</span>
+      </div>
+
+      <!-- Animated Progress Bar -->
+      <div class="flex h-2.5 w-full rounded-full overflow-hidden mb-3">
+        <div class="bg-green-500 bar-inner" style="width: 61%"></div>
+        <div class="bg-yellow-400 bar-inner delay-100" style="width: 15%; margin: 0 2px;"></div>
+        <div class="bg-red-500 bar-inner delay-200" style="width: 24%"></div>
+      </div>
+
+      <div class="flex justify-between text-[10px] font-medium mt-1">
+        <div class="flex items-center text-green-700">
+          <div class="w-2 h-2 bg-green-500 rounded-full mr-1.5"></div>In stock: 1,452
+        </div>
+        <div class="flex items-center text-yellow-700">
+          <div class="w-2 h-2 bg-yellow-400 rounded-full mr-1.5"></div>Low: 355
+        </div>
+        <div class="flex items-center text-red-600">
+          <div class="w-2 h-2 bg-red-500 rounded-full mr-1.5"></div>Out: 186
+        </div>
+      </div>
+    </div>
+
+    <!-- Pending Restock Card -->
+    <div class="bg-[#F8F8F8] border border-gray-200 rounded-3xl p-6 shadow-sm flex flex-col justify-center text-center card-hover animate-fade-in-up delay-200">
+      <h3 class="text-gray-500 font-medium text-sm uppercase tracking-wide mb-2">Pending Restock</h3>
+      <div class="text-5xl font-bold text-gray-900 my-2 tabular-nums">3</div>
+      <p class="text-gray-500 text-sm">Requests</p>
+      <div class="mt-3">
+        <span class="inline-block bg-yellow-100 text-yellow-700 text-[10px] font-semibold px-3 py-1 rounded-full border border-yellow-200">Action Required</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Middle Row: Charts -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+
+    <!-- Total Sale Chart -->
+    <div class="bg-[#F8F8F8] border border-gray-200 rounded-3xl p-6 shadow-sm h-[320px] flex flex-col card-hover animate-fade-in-up delay-250">
+      <div class="flex justify-between items-center mb-5">
+        <h3 class="text-gray-800 font-semibold text-sm">Total Sale</h3>
+        <div class="flex space-x-2">
+          <button class="flex items-center text-xs font-medium bg-white border border-gray-200 rounded-lg px-2.5 py-1 shadow-sm hover:bg-gray-50 transition-colors btn-press">
+            <svg class="w-3 h-3 mr-1 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            Monthly
+            <svg class="w-3 h-3 ml-1 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+          </button>
+          <button class="text-gray-500 hover:text-gray-700 bg-white border border-gray-200 px-2 py-1 rounded-lg shadow-sm hover:bg-gray-50 transition-colors btn-press">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Chart Area -->
+      <div class="flex-1 flex items-end justify-between px-2 relative">
+        <!-- Y Axis labels -->
+        <div class="absolute left-0 top-0 bottom-6 flex flex-col justify-between text-[9px] text-gray-400 font-medium">
+          <span>$40K</span>
+          <span>$30K</span>
+          <span>$20K</span>
+          <span>$10K</span>
+          <span>0</span>
+        </div>
+
+        <!-- Grid lines -->
+        <div class="absolute left-6 right-0 top-1 bottom-8 flex flex-col justify-between z-0">
+          <div class="border-b border-dashed border-gray-200 w-full"></div>
+          <div class="border-b border-dashed border-gray-200 w-full"></div>
+          <div class="border-b border-dashed border-gray-200 w-full"></div>
+          <div class="border-b border-dashed border-gray-200 w-full"></div>
+          <div class="border-b border-dashed border-gray-200 w-full"></div>
+        </div>
+
+        <!-- Bars (animated grow) -->
+        <div class="flex w-full justify-between items-end pl-10 z-10">
+          @for (bar of chartBars; track bar.day; let i = $index) {
+            <div class="flex flex-col items-center group cursor-pointer relative">
+              <!-- Tooltip -->
+              <div class="absolute -top-8 bg-gray-900 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg z-20 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                {{ bar.tooltip }}
+              </div>
+              <div [style.height.px]="bar.height"
+                   class="w-8 bg-blue-200 rounded-t-md relative overflow-hidden transition-all group-hover:bg-blue-100"
+                   [ngStyle]="{'animation-delay': (i * 80) + 'ms'}">
+                <div [style.height.percent]="bar.fill"
+                     class="absolute bottom-0 w-full bg-blue-500 group-hover:bg-blue-600 rounded-t-md bar-inner transition-colors"
+                     [ngStyle]="{'animation-delay': (i * 80 + 100) + 'ms'}"></div>
+              </div>
+              <span class="text-[9px] text-gray-500 mt-2 font-medium group-hover:text-gray-800 transition-colors">{{ bar.day }}</span>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Stats Card -->
+    <div class="bg-[#F8F8F8] border border-gray-200 rounded-3xl p-6 shadow-sm h-[320px] flex flex-col card-hover animate-fade-in-up delay-300">
+      <h3 class="text-gray-800 font-semibold text-sm mb-5">Quick Overview</h3>
+      <div class="space-y-4 flex-1">
+        @for (stat of quickStats; track stat.label; let i = $index) {
+          <div class="animate-fade-in-up" [ngStyle]="{'animation-delay': (300 + i * 80) + 'ms'}">
+            <div class="flex justify-between items-center mb-1.5">
+              <span class="text-xs font-medium text-gray-600">{{ stat.label }}</span>
+              <span class="text-xs font-semibold text-gray-800">{{ stat.value }}</span>
+            </div>
+            <div class="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <div class="h-full rounded-full bar-inner" [class]="stat.color" [style.width]="stat.percent"></div>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Row: Sales History -->
+  <div class="bg-[#F8F8F8] border border-gray-200 rounded-3xl p-6 shadow-sm min-h-[180px] animate-fade-in-up delay-400">
+    <h3 class="text-gray-800 font-semibold text-sm mb-5">Sales History</h3>
+    <div class="w-full">
+      <div class="grid grid-cols-4 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 px-2 pb-3 border-b border-gray-200">
+        <div>Cashier</div>
+        <div>Products</div>
+        <div>Total</div>
+        <div>Date</div>
+      </div>
+      @for (row of salesHistory; track row.cashier; let i = $index) {
+        <div class="grid grid-cols-4 items-center py-3 px-2 text-sm text-gray-700 border-b border-gray-100 table-row-hover rounded-xl animate-fade-in-up"
+             [ngStyle]="{'animation-delay': (400 + i * 60) + 'ms'}">
+          <div class="font-medium">{{ row.cashier }}</div>
+          <div>{{ row.products }}</div>
+          <div class="font-semibold text-gray-900">₱{{ row.total }}</div>
+          <div class="text-gray-400 text-xs">{{ row.date }}</div>
+        </div>
+      }
+    </div>
+  </div>
+</div>

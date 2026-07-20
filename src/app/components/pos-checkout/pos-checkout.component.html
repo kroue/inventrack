@@ -1,0 +1,231 @@
+<!-- Content (Split POS Layout) -->
+<div class="flex-1 flex overflow-hidden bg-white p-6 gap-6 w-full h-full page-enter">
+
+  <!-- Left Side: Products Catalog & Search -->
+  <div class="flex-1 flex flex-col h-full overflow-hidden">
+
+    <!-- Search Bar -->
+    <div class="relative w-full max-w-3xl mb-7 animate-fade-in-up delay-50">
+      <input
+        type="text"
+        [(ngModel)]="searchQuery"
+        (ngModelChange)="onSearchChange()"
+        (keyup.enter)="simulateScan(searchQuery)"
+        class="w-full bg-[#F2F2F2] border border-transparent rounded-full py-3.5 pl-6 pr-12 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:bg-white transition-all shadow-sm"
+        placeholder="search by product name or category..."
+        autofocus
+      >
+      <div class="absolute inset-y-0 right-4 flex items-center pointer-events-none">
+        <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+      </div>
+    </div>
+
+    <!-- Product Grid -->
+    <div class="flex-1 overflow-y-auto custom-scrollbar pb-10">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pr-2">
+
+        @for (product of searchResults; track product.product_id; let i = $index) {
+          <div
+            (click)="addToCart(product)"
+            class="bg-[#F8F8F8] border border-gray-200 rounded-3xl p-4 flex flex-col cursor-pointer h-[260px] relative group card-hover animate-scale-in"
+            [ngStyle]="{'animation-delay': (i * 60) + 'ms'}"
+          >
+            <!-- Image placeholder with subtle gradient -->
+            <div class="bg-gradient-to-br from-white to-gray-100 rounded-2xl h-[115px] w-full shadow-sm mb-3 flex items-center justify-center overflow-hidden">
+              <svg class="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+            </div>
+
+            <div class="flex-1 flex flex-col">
+              <div class="flex justify-between items-start">
+                <div class="flex-1 pr-2">
+                  <h3 class="font-medium text-[14px] text-gray-800 leading-tight group-hover:text-gray-900">{{ product.product_name }}</h3>
+                  <p class="text-[11px] text-gray-400 mt-0.5">{{ product.category_name }}</p>
+                </div>
+                <div class="flex-shrink-0 mt-0.5">
+                  <span class="w-2.5 h-2.5 rounded-full block shadow-sm"
+                    [ngClass]="product.status === 'Available' ? 'bg-green-400' : 'bg-red-400'"></span>
+                </div>
+              </div>
+
+              <div class="mt-auto flex justify-between items-end">
+                <span class="text-[18px] font-semibold text-gray-900">₱{{ product.price | number:'1.2-2' }}</span>
+                <div class="bg-white border border-gray-200 shadow-sm rounded-full px-3 py-1 text-[10px] font-medium text-gray-600">
+                  {{ product.product_id === 'P001' ? '100' : (product.product_id === 'P002' ? '50' : '200') }} in stock
+                </div>
+              </div>
+            </div>
+
+            <!-- Hover action buttons -->
+            <div class="absolute top-4 right-4 flex space-x-1 opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all duration-200">
+              <button class="bg-white rounded-full p-1.5 shadow-md border border-gray-100 hover:bg-gray-50 transition-colors" (click)="$event.stopPropagation()">
+                <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+              </button>
+              <button class="bg-white rounded-full p-1.5 shadow-md border border-gray-100 hover:bg-red-50 transition-colors" (click)="$event.stopPropagation()">
+                <svg class="w-3.5 h-3.5 text-gray-500 hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              </button>
+            </div>
+
+            <!-- Add to cart overlay on hover -->
+            <div class="absolute inset-0 bg-gray-900/5 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <span class="bg-gray-800 text-white text-xs font-semibold px-4 py-1.5 rounded-full shadow-lg opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-200">+ Add to Cart</span>
+            </div>
+          </div>
+        }
+
+        @if (searchResults.length === 0) {
+          <div class="col-span-full flex flex-col items-center justify-center py-20 text-gray-400 animate-fade-in">
+            <svg class="w-12 h-12 mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            <p class="text-sm font-medium">No products found</p>
+            <p class="text-xs mt-1">Try a different search term</p>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Side: POS Checkout Cart -->
+  <div class="w-[360px] bg-[#F8F8F8] rounded-3xl border border-gray-200 shadow-[0_4px_20px_rgba(0,0,0,0.06)] flex flex-col overflow-hidden flex-shrink-0 animate-slide-in-right">
+
+    <div class="p-5 border-b border-gray-200 bg-white flex justify-between items-center">
+      <div>
+        <h2 class="text-base font-semibold text-gray-800">Current Order</h2>
+        <p class="text-xs text-gray-400 mt-0.5">{{ cart.length }} {{ cart.length === 1 ? 'item' : 'items' }} selected</p>
+      </div>
+      @if (cart.length > 0) {
+        <button (click)="cart = []" class="text-xs text-red-400 hover:text-red-600 font-medium transition-colors btn-press">Clear all</button>
+      }
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-4 custom-scrollbar">
+      @if (cart.length === 0) {
+        <div class="h-full flex flex-col items-center justify-center text-gray-300 animate-fade-in">
+          <svg class="w-14 h-14 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+          <p class="text-sm font-medium text-gray-400">Cart is empty</p>
+          <p class="text-xs mt-1 text-gray-300">Click a product to add it</p>
+        </div>
+      }
+
+      <ul class="space-y-2.5">
+        @for (item of cart; track item.product.product_id; let i = $index) {
+          <li class="bg-white rounded-2xl p-3.5 border border-gray-100 shadow-sm relative overflow-hidden animate-fade-in-up"
+              [ngStyle]="{'animation-delay': (i * 40) + 'ms'}">
+            <!-- Risk indicator strip -->
+            <div class="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl"
+              [ngClass]="{'bg-red-400': item.riskLevel === 'High', 'bg-yellow-400': item.riskLevel === 'Medium', 'bg-green-400': item.riskLevel === 'Low'}">
+            </div>
+
+            <div class="flex justify-between items-start pl-2">
+              <div class="flex-1 pr-2">
+                <h4 class="font-semibold text-gray-800 text-sm leading-tight">{{ item.product.product_name }}</h4>
+                <p class="text-[10px] text-gray-400 mt-0.5">{{ item.product.category_name }}</p>
+
+                <div class="flex flex-wrap gap-1.5 mt-2.5">
+                  <!-- Quantity Controls -->
+                  <div class="flex items-center bg-gray-100 rounded-full overflow-hidden">
+                    <button class="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-200 transition-colors text-sm font-bold btn-press"
+                            (click)="adjustQty(i, -1)">−</button>
+                    <span class="text-[11px] font-semibold text-gray-700 px-2">{{ item.quantity }}</span>
+                    <button class="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-200 transition-colors text-sm font-bold btn-press"
+                            (click)="adjustQty(i, 1)">+</button>
+                  </div>
+
+                  <!-- Expiry Badge -->
+                  @if (item.riskLevel === 'High') {
+                    <span class="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-medium border border-red-100">🔴 Exp: {{ item.daysRemaining }}d</span>
+                  } @else if (item.riskLevel === 'Medium') {
+                    <span class="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-medium border border-yellow-100">⚠️ {{ item.daysRemaining }}d</span>
+                  } @else {
+                    <span class="text-[10px] bg-green-50 text-green-600 px-2 py-0.5 rounded-full font-medium border border-green-100">✓ Fresh</span>
+                  }
+                </div>
+              </div>
+
+              <div class="text-right flex flex-col items-end">
+                <div class="font-semibold text-gray-900 text-sm">₱{{ item.subtotal | number:'1.2-2' }}</div>
+                @if (item.discountApplied > 0) {
+                  <div class="text-[10px] text-gray-400 line-through mt-0.5">₱{{ (item.originalPrice * item.quantity) | number:'1.2-2' }}</div>
+                  <div class="text-[9px] text-green-600 font-medium">-₱{{ (item.discountApplied * item.quantity) | number:'1.2-2' }}</div>
+                }
+                <button (click)="removeFromCart(i)"
+                        class="mt-2 text-gray-300 hover:text-red-400 transition-colors p-1 rounded-full hover:bg-red-50 btn-press">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+              </div>
+            </div>
+          </li>
+        }
+      </ul>
+    </div>
+
+    <!-- Checkout Summary -->
+    <div class="bg-white p-5 border-t border-gray-100 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
+
+      <div class="space-y-2 mb-4">
+        <div class="flex justify-between text-sm text-gray-500">
+          <span>Subtotal</span>
+          <span>₱{{ (cartTotal + totalDiscount) | number:'1.2-2' }}</span>
+        </div>
+        @if (totalDiscount > 0) {
+          <div class="flex justify-between text-sm text-green-600">
+            <span>Markdowns saved</span>
+            <span>−₱{{ totalDiscount | number:'1.2-2' }}</span>
+          </div>
+        }
+      </div>
+
+      <div class="flex justify-between items-center mb-5 pt-3 border-t border-gray-100">
+        <span class="text-base font-semibold text-gray-800">Total</span>
+        <span class="text-2xl font-bold text-gray-900 tabular-nums">₱{{ cartTotal | number:'1.2-2' }}</span>
+      </div>
+
+      <!-- Payment Options -->
+      <div class="flex space-x-2 mb-4">
+        <button
+          (click)="paymentMethod = 'Cash'"
+          class="flex-1 py-2.5 rounded-full text-sm font-medium border transition-all duration-200 btn-press"
+          [ngClass]="paymentMethod === 'Cash' ? 'bg-gray-800 text-white border-gray-800 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'">
+          💵 Cash
+        </button>
+        <button
+          (click)="paymentMethod = 'Gcash'"
+          class="flex-1 py-2.5 rounded-full text-sm font-medium border transition-all duration-200 btn-press"
+          [ngClass]="paymentMethod === 'Gcash' ? 'bg-gray-800 text-white border-gray-800 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'">
+          📱 GCash
+        </button>
+      </div>
+
+      @if (paymentMethod === 'Cash' && cart.length > 0) {
+        <div class="mb-4 animate-fade-in-up">
+          <label class="text-xs font-medium text-gray-500 mb-1 block">Cash Rendered</label>
+          <input
+            type="number"
+            [(ngModel)]="cashRendered"
+            class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl py-2.5 px-4 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-200 text-sm transition-all"
+            placeholder="₱ 0.00"
+          >
+          @if (cashRendered >= cartTotal && cartTotal > 0) {
+            <div class="flex justify-between items-center mt-2 animate-fade-in">
+              <span class="text-xs text-gray-400">Change</span>
+              <span class="text-sm font-semibold text-green-600">₱{{ cashRendered - cartTotal | number:'1.2-2' }}</span>
+            </div>
+          }
+        </div>
+      }
+
+      <button
+        (click)="checkout()"
+        [disabled]="cart.length === 0"
+        class="w-full py-3.5 rounded-full text-sm font-semibold transition-all duration-200 btn-press"
+        [ngClass]="cart.length === 0 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-gray-800 text-white hover:bg-black shadow-md hover:shadow-lg'">
+        Checkout & Print Receipt
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<style>
+  .bar-inner { transform-origin: bottom; }
+</style>
