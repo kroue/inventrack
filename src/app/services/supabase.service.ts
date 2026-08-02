@@ -2,27 +2,16 @@ import { Injectable } from '@angular/core';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { environment } from '../../environments/environment';
 
-/**
- * Provides a single shared Supabase client instance for the entire app.
- *
- * Fill in your credentials in:
- *   src/environments/environment.ts       ← development
- *   src/environments/environment.prod.ts  ← production (gitignored)
- *
- * Get your values from:
- *   https://supabase.com/dashboard/project/qkhdouoqkqwkvmpgezay/settings/api
- */
 @Injectable({ providedIn: 'root' })
 export class SupabaseService {
-  readonly client: SupabaseClient;
+  private _client: SupabaseClient;
 
   constructor() {
-    this.client = createClient(
+    this._client = createClient(
       environment.supabaseUrl,
       environment.supabaseAnonKey,
       {
         auth: {
-          // Store session in sessionStorage so it clears on tab close
           storage: sessionStorage as Storage,
           autoRefreshToken: true,
           persistSession: true,
@@ -30,5 +19,39 @@ export class SupabaseService {
         },
       }
     );
+  }
+
+  get client(): SupabaseClient {
+    return this._client;
+  }
+
+  /**
+   * Generic error handler for Supabase responses.
+   */
+  handleError(error: any): never {
+    console.error('Supabase Error:', error);
+    throw new Error(error?.message || 'An unexpected error occurred with the database.');
+  }
+
+  /**
+   * Helper to execute the POS checkout transaction via RPC
+   */
+  async processPosSale(
+    userId: string | null,
+    totalAmount: number,
+    paymentMethod: 'Cash' | 'Gcash',
+    items: any[]
+  ) {
+    const { data, error } = await this.client.rpc('process_pos_sale', {
+      p_user_id: userId,
+      p_total_amount: totalAmount,
+      p_payment_method: paymentMethod,
+      p_items: items
+    });
+    
+    if (error) {
+      throw error;
+    }
+    return data;
   }
 }

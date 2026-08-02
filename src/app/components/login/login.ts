@@ -28,7 +28,7 @@ export class Login {
     }
 
     this.loading.set(true);
-    const { error } = await this.auth.login(this.email, this.password);
+    const { error } = await this.auth.signIn(this.email, this.password);
     this.loading.set(false);
 
     if (error) {

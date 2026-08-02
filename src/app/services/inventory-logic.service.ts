@@ -1,9 +1,11 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
+import { SupabaseService } from './supabase.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class InventoryLogicService {
+  private supabaseService = inject(SupabaseService);
 
   constructor() { }
 
@@ -23,7 +25,7 @@ export class InventoryLogicService {
    * Returns an object containing the ROP and a boolean indicating if a Low Stock Alert is triggered.
    */
   calculateROPAndTrigger(salesVelocity: number, leadTimeDays: number, safetyStock: number, currentStockQuantity: number): { rop: number, isLowStockAlert: boolean } {
-    const rop = (salesVelocity * leadTimeDays) + safetyStock;
+    const rop = Math.ceil((salesVelocity * leadTimeDays) + safetyStock);
     const isLowStockAlert = currentStockQuantity <= rop;
     return { rop, isLowStockAlert };
   }
@@ -60,9 +62,309 @@ export class InventoryLogicService {
   }
 
   /**
+   * 0. Fetch active products from Supabase
+   */
+  async getActiveProducts(): Promise<import('../models/itrack.models').Product[]> {
+    const supabase = this.supabaseService.client;
+    const { data, error } = await supabase
+      .from('products')
+      .select('*, inventory(*)')
+      .neq('status', 'Out of Stock');
+      
+    if (error) this.supabaseService.handleError(error);
+    return data as any[];
+  }
+
+  /**
+   * Fetch a product by its barcode from Supabase
+   */
+  async getProductByBarcode(barcode: string): Promise<import('../models/itrack.models').Product | null> {
+    const supabase = this.supabaseService.client;
+    const { data, error } = await supabase
+      .from('products')
+      .select('*, inventory(*)')
+      .eq('barcode', barcode)
+      .maybeSingle();
+      
+    if (error) {
+      this.supabaseService.handleError(error);
+    }
+    return data as import('../models/itrack.models').Product | null;
+  }
+
+  /**
+   * Create a new product and initialize its inventory row.
+   */
+  async createProduct(product: Partial<import('../models/itrack.models').Product>, initialStock: number = 0, safetyStock: number = 20, leadTime: number = 2): Promise<void> {
+    const supabase = this.supabaseService.client;
+    
+    // Insert Product
+    const { data: newProduct, error: productError } = await supabase
+      .from('products')
+      .insert(product)
+      .select()
+      .single();
+      
+    if (productError) throw productError;
+    
+    // Initialize Inventory Row
+    if (newProduct) {
+      const { error: invError } = await supabase
+        .from('inventory')
+        .insert({
+          product_id: newProduct.product_id,
+          stock_quantity: initialStock,
+          safety_stock: safetyStock,
+          lead_time: leadTime,
+          reorder_point: safetyStock // initial basic calculation
+        });
+        
+      if (invError) throw invError;
+
+      if (initialStock > 0) {
+        // Create initial batch
+        const expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + 365);
+        const { data: batch } = await supabase
+          .from('batches')
+          .insert({
+            product_id: newProduct.product_id,
+            quantity_received: initialStock,
+            quantity_remaining: initialStock,
+            batch_expiration: expiryDate.toISOString(),
+            risk_score: 'Normal'
+          })
+          .select()
+          .single();
+
+        // Create stock log
+        await supabase
+          .from('stock_log')
+          .insert({
+            product_id: newProduct.product_id,
+            batch_id: batch?.batch_id,
+            quantity: initialStock,
+            change_type: 'IN',
+            remarks: 'Initial Product Stock Setup'
+          });
+      }
+    }
+  }
+
+  /**
+   * Update an existing product's details.
+   */
+  async updateProduct(productId: string, updates: Partial<import('../models/itrack.models').Product>): Promise<void> {
+    const supabase = this.supabaseService.client;
+    const { error } = await supabase
+      .from('products')
+      .update(updates)
+      .eq('product_id', productId);
+      
+    if (error) throw error;
+  }
+
+  /**
+   * Hard-delete a product from the database and clean up associated child records.
+   */
+  async deleteProduct(productId: string): Promise<void> {
+    const supabase = this.supabaseService.client;
+
+    // Clean up dependent child records to avoid FK constraint violations
+    await supabase.from('purchase_items').delete().eq('product_id', productId);
+    await supabase.from('delivery_items').delete().eq('product_id', productId);
+    await supabase.from('stock_log').delete().eq('product_id', productId);
+    await supabase.from('batches').delete().eq('product_id', productId);
+    await supabase.from('inventory').delete().eq('product_id', productId);
+    await supabase.from('restock_requests').delete().eq('product_id', productId);
+    await supabase.from('alerts').delete().eq('product_id', productId);
+    await supabase.from('forecasts').delete().eq('product_id', productId);
+    await supabase.from('sales_history').delete().eq('product_id', productId);
+
+    // Delete the product
+    const { error } = await supabase
+      .from('products')
+      .delete()
+      .eq('product_id', productId);
+      
+    if (error) throw error;
+  }
+
+  /**
+   * 0. Fetch batches for a specific product, ordered by expiration (FEFO)
+   */
+  async getBatchesForProduct(productId: string): Promise<import('../models/itrack.models').Batches[]> {
+    const supabase = this.supabaseService.client;
+    const { data, error } = await supabase
+      .from('batches')
+      .select('*')
+      .eq('product_id', productId)
+      .order('batch_expiration', { ascending: true });
+      
+    if (error) this.supabaseService.handleError(error);
+    return data as import('../models/itrack.models').Batches[];
+  }
+
+  /**
    * Calculate line item subtotal
    */
   calculateLineSubtotal(retailPrice: number, discountApplied: number, quantitySold: number): number {
     return (retailPrice - discountApplied) * quantitySold;
+  }
+
+  /**
+   * 5. Analyze Sales & Trigger Alerts in Supabase
+   */
+  async runPredictiveAnalytics(productId: string, leadTimeDays: number = 2, safetyStock: number = 20) {
+    try {
+      const supabase = this.supabaseService.client;
+      
+      // 1. Fetch sales history for the last 30 days
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const { data: sales, error: salesError } = await supabase
+        .from('sales_history')
+        .select('quantity_sold, date')
+        .eq('product_id', productId)
+        .gte('date', thirtyDaysAgo.toISOString());
+        
+      if (salesError) throw salesError;
+
+      // Calculate sum of sales over 30 days to find average daily velocity
+      const totalSold = (sales ?? []).reduce((acc, sale) => acc + sale.quantity_sold, 0);
+      const dailyVelocity = totalSold / 30; // simplistic EMA for demonstration
+
+      // 2. Fetch current stock quantity
+      const { data: inventory, error: invError } = await supabase
+        .from('inventory')
+        .select('stock_quantity')
+        .eq('product_id', productId)
+        .maybeSingle();
+        
+      if (invError) throw invError;
+      
+      const currentStock = inventory?.stock_quantity ?? 0;
+
+      // 3. Compute ROP
+      const { rop, isLowStockAlert } = this.calculateROPAndTrigger(dailyVelocity, leadTimeDays, safetyStock, currentStock);
+
+      // 4. Update Forecasts table (requires UNIQUE constraint on product_id)
+      const { data: forecastData } = await supabase
+        .from('forecasts')
+        .upsert({ 
+          product_id: productId, 
+          daily_velocity: dailyVelocity, 
+          calculated_rop: rop,
+          suggested_order_qty: Math.max(0, rop - currentStock)
+        }, { onConflict: 'product_id' })
+        .select()
+        .maybeSingle();
+
+      // 5. Trigger Alerts if needed
+      if (isLowStockAlert) {
+        const { data: alertData } = await supabase
+          .from('alerts')
+          .insert({
+            product_id: productId,
+            forecast_id: forecastData?.forecast_id,
+            alert_type: 'LOW STOCK',
+            status: 'Active'
+          })
+          .select()
+          .maybeSingle();
+          
+        if (alertData) {
+          await supabase
+            .from('restock_requests')
+            .insert({
+              product_id: productId,
+              alert_id: alertData.alert_id,
+              suggested_quantity: Math.max(0, rop - currentStock) + safetyStock,
+              status: 'Pending'
+            });
+        }
+      }
+    } catch (err) {
+      console.warn(`[runPredictiveAnalytics] Skipped for product ${productId}:`, err);
+    }
+  }
+
+  /**
+   * Fetch full predictive analytics summary for all products matching the IPO model
+   */
+  async getPredictiveAnalyticsSummary(): Promise<any[]> {
+    const supabase = this.supabaseService.client;
+    
+    // Fetch products, inventory, forecasts, and batches
+    const { data: products } = await supabase
+      .from('products')
+      .select('*, inventory(*), batches(*)');
+
+    if (!products || products.length === 0) return [];
+
+    const summaryList = [];
+
+    for (const prod of products) {
+      const inv = prod.inventory?.[0] || { stock_quantity: 0, safety_stock: 10, lead_time: 2, reorder_point: 20 };
+      
+      // Fetch sales history for EMA calculation
+      const { data: sales } = await supabase
+        .from('sales_history')
+        .select('quantity_sold')
+        .eq('product_id', prod.product_id);
+
+      const totalSold = (sales || []).reduce((sum, s) => sum + (s.quantity_sold || 0), 0);
+      const daysCount = 30;
+      
+      // 1. Daily Velocity (EMA) V_i
+      const dailyVelocity = totalSold > 0 ? Number((totalSold / daysCount).toFixed(2)) : 0.85;
+
+      // 2. Reorder Point (ROP) ROP_i = (V_i * L_i) + ss_i
+      const leadTime = inv.lead_time || 2;
+      const safetyStock = inv.safety_stock || 10;
+      const rop = Math.ceil((dailyVelocity * leadTime) + safetyStock);
+
+      // 3. Status A_i = 1 if Q_i <= ROP_i else 0
+      const currentStock = inv.stock_quantity || 0;
+      const isLowStock = currentStock <= rop;
+      const alertStatus = isLowStock ? 'Low Stock Alert' : 'Optimal';
+
+      // 4. Suggested Order Quantity O_i = (V_i * P) - Q_i
+      const projectionPeriod = 30; // P = 30 days
+      const rawSOQ = (dailyVelocity * projectionPeriod) - currentStock;
+      const soq = Math.max(0, Math.ceil(rawSOQ));
+
+      // 5. Expiry Risk Markdown evaluation
+      let nearestBatchRisk = 'Normal';
+      let discountRate = 0;
+      if (prod.batches && prod.batches.length > 0) {
+        const sortedBatches = prod.batches.sort((a: any, b: any) => 
+          new Date(a.batch_expiration).getTime() - new Date(b.batch_expiration).getTime()
+        );
+        const evalResult = this.evaluateExpiryMarkdown(prod.price, new Date(sortedBatches[0].batch_expiration));
+        nearestBatchRisk = evalResult.riskLevel;
+        discountRate = evalResult.discountApplied;
+      }
+
+      summaryList.push({
+        productId: prod.product_id,
+        name: prod.product_name,
+        category: prod.category_name,
+        currentStock,
+        dailyVelocity,
+        leadTime,
+        safetyStock,
+        rop,
+        status: alertStatus,
+        isLowStock,
+        soq,
+        price: prod.price,
+        nearestBatchRisk,
+        discountRate
+      });
+    }
+
+    return summaryList;
   }
 }

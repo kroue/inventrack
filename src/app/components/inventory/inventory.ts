@@ -1,7 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Product } from '../../models/itrack.models';
+import { InventoryLogicService } from '../../services/inventory-logic.service';
 
 @Component({
   selector: 'app-inventory',
@@ -9,31 +10,141 @@ import { Product } from '../../models/itrack.models';
   templateUrl: './inventory.html',
   styleUrl: './inventory.css',
 })
-export class Inventory {
+export class Inventory implements OnInit {
+  private inventoryLogic = inject(InventoryLogicService);
+
   searchQuery = '';
 
-  products: Product[] = [
-    { product_id: 'P001', product_name: 'Premium Jasmine Rice (5kg)', category_name: 'Grains',      barcode: '123456789', price: 250.00, discount_rate: 0.20, status: 'Available'  },
-    { product_id: 'P002', product_name: 'Whole Milk (1L)',             category_name: 'Dairy',       barcode: '987654321', price: 90.00,  discount_rate: 0.50, status: 'Available'  },
-    { product_id: 'P003', product_name: 'Canned Tuna (Spicy)',         category_name: 'Canned Goods', barcode: '456123789', price: 45.50,  discount_rate: 0.10, status: 'Available'  },
-    { product_id: 'P004', product_name: 'Cooking Oil (1L)',            category_name: 'Condiments',  barcode: '111222333', price: 69.00,  discount_rate: 0.00, status: 'Available'  },
-    { product_id: 'P005', product_name: 'Instant Noodles (5s)',        category_name: 'Dry Goods',   barcode: '444555666', price: 60.00,  discount_rate: 0.00, status: 'Low Stock'  },
-    { product_id: 'P006', product_name: 'Tomato Sauce (250g)',         category_name: 'Condiments',  barcode: '777888999', price: 87.00,  discount_rate: 0.00, status: 'Available'  },
-    { product_id: 'P007', product_name: 'White Sugar (1kg)',           category_name: 'Dry Goods',   barcode: '101010101', price: 99.00,  discount_rate: 0.00, status: 'Out of Stock' },
-  ];
+  // State using Angular Signals
+  products = signal<Product[]>([]);
+  isLoading = signal<boolean>(true);
+  errorMessage = signal<string | null>(null);
 
-  stockMap: Record<string, number> = {
-    P001: 100, P002: 50,  P003: 200,
-    P004: 78,  P005: 12,  P006: 55,  P007: 0,
-  };
+  stockMap: Record<string, number> = {};
+
+  // View Mode State
+  viewMode = signal<'Grid' | 'List'>('Grid');
+
+  // Modal State
+  isModalOpen = signal<boolean>(false);
+  modalMode = signal<'Add' | 'Edit'>('Add');
+  isSubmitting = signal<boolean>(false);
+  
+  // Current Form Data
+  currentProduct = signal<Partial<Product> & { initialStock?: number }>({});
+
+  async ngOnInit() {
+    try {
+      this.isLoading.set(true);
+      this.errorMessage.set(null);
+      
+      const data = await this.inventoryLogic.getActiveProducts();
+      const map: Record<string, number> = {};
+      const updatedData = (data as any[]).map(p => {
+        const inv = p.inventory?.[0] || {};
+        const stock_quantity = inv.stock_quantity ?? 0;
+        const reorder_point = inv.reorder_point ?? 0;
+        const needs_restock = stock_quantity <= reorder_point;
+        
+        map[p.product_id] = stock_quantity;
+        return { ...p, stock_quantity, needs_restock };
+      });
+      this.stockMap = map;
+      this.products.set(updatedData);
+      
+    } catch (err: any) {
+      console.error('Failed to load inventory data', err);
+      this.errorMessage.set(err.message || 'Failed to load inventory data');
+    } finally {
+      this.isLoading.set(false);
+    }
+  }
 
   get filteredProducts(): Product[] {
-    if (!this.searchQuery.trim()) return this.products;
+    const allProducts = this.products();
+    if (!this.searchQuery.trim()) return allProducts;
+    
     const q = this.searchQuery.toLowerCase();
-    return this.products.filter(p =>
+    return allProducts.filter(p =>
       p.product_name.toLowerCase().includes(q) ||
       p.category_name.toLowerCase().includes(q) ||
       p.barcode.includes(q)
     );
+  }
+
+  openAddModal() {
+    this.modalMode.set('Add');
+    this.currentProduct.set({
+      product_name: '',
+      category_name: '',
+      barcode: '',
+      description: '',
+      cost_price: 0,
+      price: 0,
+      status: 'Available',
+      initialStock: 0
+    });
+    this.isModalOpen.set(true);
+  }
+
+  openEditModal(product: Product) {
+    this.modalMode.set('Edit');
+    this.currentProduct.set({ ...product });
+    this.isModalOpen.set(true);
+  }
+
+  closeModal() {
+    this.isModalOpen.set(false);
+    this.errorMessage.set(null);
+  }
+
+  async saveProduct() {
+    try {
+      this.isSubmitting.set(true);
+      this.errorMessage.set(null);
+      const data = this.currentProduct();
+      
+      if (this.modalMode() === 'Add') {
+        const productToInsert = {
+          product_name: data.product_name,
+          category_name: data.category_name,
+          barcode: data.barcode,
+          description: data.description,
+          price: data.price,
+          status: data.status,
+          discount_rate: 0
+        };
+        await this.inventoryLogic.createProduct(productToInsert, data.initialStock || 0);
+      } else {
+        const { product_id, initialStock, ...updates } = data as any;
+        await this.inventoryLogic.updateProduct(product_id, updates);
+      }
+      
+      this.closeModal();
+      await this.ngOnInit(); // Refresh list
+    } catch (err: any) {
+      console.error('Save failed', err);
+      this.errorMessage.set(err.message || 'Failed to save product');
+    } finally {
+      this.isSubmitting.set(false);
+    }
+  }
+
+  async deleteProduct(productId: string) {
+    if (confirm('Are you sure you want to delete this product? This action cannot be undone.')) {
+      try {
+        this.isLoading.set(true);
+        await this.inventoryLogic.deleteProduct(productId);
+        await this.ngOnInit(); // Refresh list
+      } catch (err: any) {
+        console.error('Delete failed', err);
+        this.errorMessage.set(err.message || 'Failed to delete product');
+        this.isLoading.set(false);
+      }
+    }
+  }
+
+  async adjustStock(productId: string, batchId: string, quantityAdjusted: number, reason: string) {
+    // TODO: Implement stock adjustment
   }
 }

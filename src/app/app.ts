@@ -13,6 +13,6 @@ export class App {
   constructor(public auth: AuthService) {}
 
   logout() {
-    this.auth.logout();
+    this.auth.signOut();
   }
 }

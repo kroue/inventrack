@@ -53,6 +53,7 @@ Thumbs.db
 
 # Angular environment files with real secrets (only prod should be excluded)
 src/environments/environment.prod.ts
+src/environments/environment.local.ts
 
 # Cloud provider credentials
 .aws/

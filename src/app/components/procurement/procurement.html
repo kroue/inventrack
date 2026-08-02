@@ -1,102 +1,433 @@
-<div class="p-8 h-full w-full overflow-y-auto bg-white custom-scrollbar page-enter">
+<div class="p-8 h-full w-full overflow-y-auto bg-white custom-scrollbar page-enter" (click)="closeAllDropdowns()">
 
   <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
 
     <!-- Restock Request Card -->
-    <div class="bg-[#F8F8F8] border border-gray-200 rounded-3xl p-6 shadow-sm card-hover animate-fade-in-up delay-50">
-      <div class="flex justify-between items-center mb-5">
-        <h3 class="text-gray-800 font-semibold text-base">Restock Request</h3>
-        <span class="bg-gray-200 text-gray-600 text-[11px] font-medium px-2.5 py-0.5 rounded-full">Items: 3</span>
-      </div>
-
-      <div class="mb-4">
-        <button class="text-gray-700 text-sm font-medium flex items-center bg-white border border-gray-200 px-3 py-1.5 rounded-lg shadow-sm hover:bg-gray-50 transition-colors btn-press">
-          Supplier 1
-          <svg class="w-3 h-3 ml-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-        </button>
-      </div>
-
-      <div class="w-full text-sm">
-        <div class="grid grid-cols-4 font-semibold text-xs text-gray-400 uppercase tracking-wide mb-3 px-2 pb-2 border-b border-gray-200">
-          <div class="col-span-2">Name</div>
-          <div class="text-center">Q</div>
-          <div class="text-center">SOQ</div>
+    <div class="bg-[#F8F8F8] border border-gray-200 rounded-3xl p-6 shadow-sm card-hover animate-fade-in-up delay-50 flex flex-col justify-between">
+      <div>
+        <div class="flex justify-between items-center mb-5">
+          <div class="flex items-center space-x-2">
+            <h3 class="text-gray-800 font-semibold text-base">Restock Request</h3>
+            <span class="bg-gray-200 text-gray-700 text-[11px] font-medium px-2.5 py-0.5 rounded-full">
+              Items: {{ restockItems().length }}
+            </span>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button (click)="autoGenerateRestock()" title="Auto-detect low stock items" class="text-xs text-gray-600 hover:text-gray-900 bg-white border border-gray-200 px-2.5 py-1 rounded-lg shadow-sm hover:bg-gray-50 transition-colors btn-press">
+              ⚡ Auto-Restock
+            </button>
+            <button (click)="openAddItemModal()" title="Add product to restock list" class="text-xs font-medium text-white bg-gray-900 px-3 py-1 rounded-lg shadow-sm hover:bg-black transition-colors btn-press">
+              + Add Item
+            </button>
+          </div>
         </div>
-        @for (item of restockItems; track item.name; let i = $index) {
-          <div class="grid grid-cols-4 items-center py-3 px-2 text-gray-800 border-b border-gray-100 table-row-hover rounded-lg animate-fade-in-up"
-               [ngStyle]="{'animation-delay': (50 + i * 60) + 'ms'}">
-            <div class="col-span-2 font-medium">{{ item.name }}</div>
-            <div class="text-center text-gray-500">{{ item.quantity }}</div>
-            <div class="flex justify-between items-center pr-1">
-              <span class="text-center font-medium text-gray-800">{{ item.soq }}</span>
-              <input type="checkbox" [checked]="item.checked"
-                     class="rounded border-gray-300 text-gray-800 focus:ring-0 cursor-pointer">
+
+        <!-- Supplier & Fulfillment Selectors -->
+        <div class="flex flex-wrap items-center gap-3 mb-4">
+          <div class="flex-1 min-w-[140px] relative">
+            <label class="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Supplier</label>
+            
+            @if (!isAddingNewSupplier()) {
+              <div class="relative">
+                <button type="button" (click)="toggleSupplierDropdown($event)" class="w-full text-left text-gray-700 text-xs font-medium bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors flex justify-between items-center cursor-pointer">
+                  <span class="truncate">{{ selectedSupplierName() }}</span>
+                  <svg class="w-4 h-4 text-gray-400 flex-shrink-0 transition-transform duration-200" [ngClass]="isSupplierDropdownOpen() ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+                
+                <div class="absolute z-10 w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-lg transform transition-all duration-200 origin-top overflow-hidden"
+                     [ngClass]="isSupplierDropdownOpen() ? 'opacity-100 scale-y-100 visible' : 'opacity-0 scale-y-95 invisible'">
+                  <ul class="max-h-48 overflow-y-auto custom-scrollbar py-1 m-0">
+                    @for (supplier of suppliers(); track supplier.supplier_id) {
+                      <li (click)="onCustomSupplierChange(supplier.supplier_id)" class="px-3 py-2 text-xs text-gray-700 font-medium hover:bg-gray-50 cursor-pointer transition-colors"
+                          [ngClass]="selectedSupplierId() === supplier.supplier_id ? 'bg-blue-50/50 text-blue-700' : ''">
+                        {{ supplier.supplier_name }}
+                      </li>
+                    }
+                    <li (click)="onCustomSupplierChange('NEW_SUPPLIER')" class="px-3 py-2 text-xs font-bold text-blue-600 hover:bg-blue-50 cursor-pointer transition-colors border-t border-gray-100 mt-1">
+                      + Add New Supplier...
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            } @else {
+              <div class="flex gap-2">
+                <input 
+                  type="text" 
+                  [ngModel]="supplierSearchText()" 
+                  (ngModelChange)="supplierSearchText.set($event)"
+                  (keyup.enter)="saveNewSupplier()"
+                  placeholder="Type new supplier name..."
+                  autofocus
+                  class="w-full text-gray-700 text-xs font-medium bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors">
+                
+                <button (click)="saveNewSupplier()" [disabled]="!supplierSearchText().trim() || isCreatingSupplier()" class="px-3 py-1.5 bg-gray-900 text-white rounded-xl text-xs font-semibold hover:bg-black transition-colors shadow-sm disabled:opacity-50 whitespace-nowrap">
+                  {{ isCreatingSupplier() ? 'Saving...' : 'Save' }}
+                </button>
+                <button (click)="cancelNewSupplier()" class="px-2 py-1.5 text-gray-400 hover:text-gray-600 transition-colors">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+              </div>
+            }
+          </div>
+
+          <div class="w-32 relative">
+            <label class="block text-[10px] font-semibold uppercase tracking-wider text-gray-400 mb-1">Type</label>
+            <div class="relative">
+              <button type="button" (click)="toggleTypeDropdown($event)" class="w-full text-left text-gray-700 text-xs font-medium bg-white border border-gray-200 px-3 py-2 rounded-xl shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300 transition-colors flex justify-between items-center cursor-pointer">
+                <span>{{ fulfillmentType() }}</span>
+                <svg class="w-4 h-4 text-gray-400 flex-shrink-0 transition-transform duration-200" [ngClass]="isTypeDropdownOpen() ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+              </button>
+              
+              <div class="absolute z-10 w-full mt-1 bg-white border border-gray-100 rounded-xl shadow-lg transform transition-all duration-200 origin-top overflow-hidden"
+                   [ngClass]="isTypeDropdownOpen() ? 'opacity-100 scale-y-100 visible' : 'opacity-0 scale-y-95 invisible'">
+                <ul class="py-1 m-0">
+                  <li (click)="selectFulfillmentType('Delivery')" class="px-3 py-2 text-xs text-gray-700 font-medium hover:bg-gray-50 cursor-pointer transition-colors" [ngClass]="fulfillmentType() === 'Delivery' ? 'bg-blue-50/50 text-blue-700' : ''">Delivery</li>
+                  <li (click)="selectFulfillmentType('Pick-up')" class="px-3 py-2 text-xs text-gray-700 font-medium hover:bg-gray-50 cursor-pointer transition-colors" [ngClass]="fulfillmentType() === 'Pick-up' ? 'bg-blue-50/50 text-blue-700' : ''">Pick-up</li>
+                </ul>
+              </div>
             </div>
           </div>
-        }
+        </div>
+
+        <!-- Restock Items Table -->
+        <div class="w-full text-sm">
+          <div class="grid grid-cols-12 font-semibold text-[11px] text-gray-400 uppercase tracking-wide mb-3 px-2 pb-2 border-b border-gray-200">
+            <div class="col-span-5">Name</div>
+            <div class="col-span-2 text-center">Stock</div>
+            <div class="col-span-3 text-center">SOQ</div>
+            <div class="col-span-2 text-right">Select</div>
+          </div>
+
+          @for (item of restockItems(); track item.name; let i = $index) {
+            <div class="grid grid-cols-12 items-center py-2.5 px-2 text-gray-800 border-b border-gray-100 table-row-hover rounded-lg animate-fade-in-up"
+                 [ngStyle]="{'animation-delay': (50 + i * 40) + 'ms'}">
+              <div class="col-span-5 font-medium text-xs truncate pr-1" [title]="item.name">{{ item.name }}</div>
+              <div class="col-span-2 text-center text-xs text-gray-500">{{ item.quantity }}</div>
+              <div class="col-span-3 text-center px-1">
+                <input type="number" [ngModel]="item.soq" (ngModelChange)="updateSOQ(i, $event)" min="1"
+                       class="w-16 text-center text-xs font-semibold bg-white border border-gray-200 rounded-lg py-1 focus:outline-none focus:ring-1 focus:ring-gray-400">
+              </div>
+              <div class="col-span-2 flex items-center justify-end space-x-2">
+                <button (click)="deleteRestockItem(i)" title="Remove item" class="text-gray-300 hover:text-red-500 transition-colors">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </button>
+                <input type="checkbox" [checked]="item.checked" (change)="toggleRestockItem(i)"
+                       class="rounded border-gray-300 text-gray-900 focus:ring-0 cursor-pointer w-4 h-4">
+              </div>
+            </div>
+          }
+
+          @if (restockItems().length === 0) {
+            <div class="py-8 text-center text-gray-400">
+              @if (!selectedSupplierId()) {
+                <p class="text-xs mb-1 font-medium text-gray-600">Select a Supplier above to create a Purchase Order</p>
+                <p class="text-[11px] text-gray-400">The restock request list starts empty for each supplier.</p>
+              } @else {
+                <p class="text-xs mb-2 text-gray-600">No items added for this supplier yet</p>
+                <div class="flex justify-center space-x-3 mt-1">
+                  <button (click)="openAddItemModal()" class="text-xs text-gray-800 font-semibold underline">+ Add Item</button>
+                  <button (click)="autoGenerateRestock()" class="text-xs text-blue-600 font-semibold underline">⚡ Auto-Restock</button>
+                </div>
+              }
+            </div>
+          }
+        </div>
       </div>
 
       <div class="mt-6 flex justify-center">
-        <button class="bg-gray-800 text-white rounded-full py-2.5 px-8 text-sm font-medium shadow-md hover:bg-black transition-all duration-200 btn-press hover:shadow-lg">
-          Generate Purchase Order
+        <button (click)="generatePO()" [disabled]="isGenerating() || restockItems().length === 0" class="bg-gray-900 text-white rounded-full py-2.5 px-8 text-sm font-medium shadow-md hover:bg-black transition-all duration-200 btn-press hover:shadow-lg disabled:opacity-40">
+          {{ isGenerating() ? 'Generating...' : 'Generate Purchase Order' }}
         </button>
       </div>
     </div>
 
-    <!-- Pending Request Card -->
-    <div class="bg-[#F8F8F8] border border-gray-200 rounded-3xl p-6 shadow-sm card-hover animate-fade-in-up delay-150">
-      <h3 class="text-gray-800 font-semibold text-base mb-5">Pending Request</h3>
-
-      <div class="w-full text-sm">
-        <div class="grid grid-cols-3 font-semibold text-xs text-gray-400 uppercase tracking-wide mb-3 px-2 pb-2 border-b border-gray-200">
-          <div>Supplier</div>
-          <div class="text-center">Items</div>
-          <div class="text-right">Type</div>
+    <!-- Pending Request Card (Wireframe 1) -->
+    <div class="bg-[#F8F8F8] border border-gray-200 rounded-3xl p-6 shadow-sm card-hover animate-fade-in-up delay-150 flex flex-col justify-between">
+      <div>
+        <div class="flex justify-between items-center mb-5">
+          <h3 class="text-gray-800 font-semibold text-base">Pending Request</h3>
+          <span class="bg-gray-200 text-gray-700 text-[11px] font-medium px-2.5 py-0.5 rounded-full">
+            {{ pendingRequests().length }} Orders
+          </span>
         </div>
-        @for (req of pendingRequests; track req.supplier; let i = $index) {
-          <div class="grid grid-cols-3 items-center py-3 px-2 border-b border-gray-100 table-row-hover rounded-lg animate-fade-in-up"
-               [ngStyle]="{'animation-delay': (150 + i * 60) + 'ms'}">
-            <div class="font-medium text-gray-800">{{ req.supplier }}</div>
-            <div class="text-center text-gray-500">{{ req.items }}</div>
-            <div class="text-right">
-              <span class="px-2.5 py-0.5 rounded-full text-[11px] font-medium"
-                [ngClass]="req.type === 'Pick-up' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'">
-                {{ req.type }}
-              </span>
-            </div>
+
+        <div class="w-full text-sm">
+          <div class="grid grid-cols-4 font-semibold text-xs text-gray-400 uppercase tracking-wide mb-3 px-2 pb-2 border-b border-gray-200">
+            <div>Supplier</div>
+            <div class="text-center">Items</div>
+            <div class="text-center">Type</div>
+            <div class="text-right">Action</div>
           </div>
-        }
+
+          @for (req of pendingRequests(); track req.purchase_order_id; let i = $index) {
+            <div (click)="openPODetails(req)"
+                 class="grid grid-cols-4 items-center py-3 px-2 border-b border-gray-100 cursor-pointer table-row-hover rounded-lg animate-fade-in-up group"
+                 [ngStyle]="{'animation-delay': (150 + i * 60) + 'ms'}">
+              <div class="font-semibold text-gray-800 text-xs truncate group-hover:text-blue-600 transition-colors" [title]="req.supplier">
+                {{ req.supplier }}
+              </div>
+              <div class="text-center text-xs text-gray-500">{{ req.itemsCountLabel }}</div>
+              <div class="text-center">
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold"
+                  [ngClass]="req.type === 'Pick-up' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'">
+                  {{ req.type }}
+                </span>
+              </div>
+              <div class="text-right">
+                <button (click)="openPODetails(req); $event.stopPropagation()" class="text-xs font-semibold bg-gray-900 text-white px-3 py-1 rounded-lg hover:bg-black transition-all shadow-sm btn-press">
+                  View
+                </button>
+              </div>
+            </div>
+          }
+
+          @if (pendingRequests().length === 0) {
+            <div class="py-12 text-center text-gray-400 flex flex-col items-center">
+              <svg class="w-8 h-8 mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+              <p class="text-xs">No pending purchase orders</p>
+              <p class="text-[11px] text-gray-400 mt-1">Generate a PO from the Restock Request list to see it here.</p>
+            </div>
+          }
+        </div>
       </div>
     </div>
   </div>
 
   <!-- Deliveries Section -->
   <div class="bg-[#F8F8F8] border border-gray-200 rounded-3xl p-6 shadow-sm card-hover animate-fade-in-up delay-250">
-    <h3 class="text-gray-800 font-semibold text-base mb-5">Deliveries</h3>
+    <div class="flex justify-between items-center mb-5">
+      <div class="flex items-center space-x-3">
+        <h3 class="text-gray-800 font-semibold text-base">Deliveries</h3>
+        <button (click)="openBarcodeModal()" title="Receive delivery via barcode scanner" class="text-xs font-medium text-white bg-blue-600 px-3 py-1.5 rounded-lg shadow-sm hover:bg-blue-700 transition-colors flex items-center space-x-1 btn-press">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+          <span>Scan Barcode</span>
+        </button>
+      </div>
+      <span class="text-xs text-gray-400">Total Received: {{ deliveries().length }}</span>
+    </div>
 
-    <div class="flex w-full">
-      <div class="flex-1 pr-6 text-sm">
+    <div class="flex flex-col md:flex-row w-full gap-6">
+      <div class="flex-1 text-sm">
         <div class="grid grid-cols-3 font-semibold text-xs text-gray-400 uppercase tracking-wide mb-3 px-2 pb-2 border-b border-gray-200">
           <div>Product</div>
           <div class="text-center">Qty Ordered</div>
           <div class="text-center">Qty Received</div>
         </div>
-        @for (delivery of deliveries; track delivery.product; let i = $index) {
-          <div class="grid grid-cols-3 items-center py-3 px-2 border-b border-gray-100 table-row-hover rounded-lg animate-fade-in-up"
+
+        @for (delivery of deliveries(); track delivery.delivery_id; let i = $index) {
+          <div (click)="selectDelivery(i)" 
+               class="grid grid-cols-3 items-center py-3 px-2 border-b border-gray-100 cursor-pointer rounded-xl transition-all animate-fade-in-up"
+               [ngClass]="selectedDeliveryIndex() === i ? 'bg-white shadow-sm border-gray-200' : 'table-row-hover'"
                [ngStyle]="{'animation-delay': (250 + i * 60) + 'ms'}">
-            <div class="font-medium text-gray-800">{{ delivery.product }}</div>
-            <div class="text-center text-gray-500">{{ delivery.ordered }}</div>
-            <div class="text-center font-semibold text-gray-800">{{ delivery.received }}</div>
+            <div class="font-medium text-gray-800 text-xs truncate" [title]="delivery.product">{{ delivery.product }}</div>
+            <div class="text-center text-xs text-gray-500">{{ delivery.ordered }}</div>
+            <div class="text-center text-xs font-semibold text-green-600">{{ delivery.received }}</div>
+          </div>
+        }
+
+        @if (deliveries().length === 0) {
+          <div class="py-8 text-center text-gray-400">
+            <p class="text-xs">No delivery logs recorded yet</p>
           </div>
         }
       </div>
 
-      <div class="w-[200px] pl-6 border-l border-gray-200 text-sm text-gray-600 flex flex-col justify-center space-y-3 animate-fade-in-up delay-300">
-        <div><span class="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-0.5">Date Delivered</span><span class="text-gray-700">—</span></div>
-        <div><span class="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-0.5">Fulfillment</span><span class="text-gray-700">—</span></div>
-        <div><span class="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-0.5">Received By</span><span class="text-gray-700">—</span></div>
-        <div><span class="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-0.5">Supplier</span><span class="text-gray-700">—</span></div>
+      <div class="w-full md:w-[220px] md:pl-6 md:border-l border-gray-200 text-xs text-gray-600 flex flex-col justify-center space-y-3.5 animate-fade-in-up delay-300">
+        <div>
+          <span class="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">Date Delivered</span>
+          <span class="text-gray-800 font-medium">{{ deliveries()[selectedDeliveryIndex()]?.dateDelivered ? (deliveries()[selectedDeliveryIndex()].dateDelivered | date:'mediumDate') : '—' }}</span>
+        </div>
+        <div>
+          <span class="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">Fulfillment</span>
+          <span class="text-gray-800 font-medium">{{ deliveries()[selectedDeliveryIndex()]?.fulfillment || '—' }}</span>
+        </div>
+        <div>
+          <span class="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">Received By</span>
+          <span class="text-gray-800 font-medium">{{ deliveries()[selectedDeliveryIndex()] ? 'Admin User' : '—' }}</span>
+        </div>
+        <div>
+          <span class="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">Supplier</span>
+          <span class="text-gray-800 font-medium">{{ deliveries()[selectedDeliveryIndex()]?.supplier || '—' }}</span>
+        </div>
       </div>
     </div>
   </div>
+
 </div>
+
+<!-- Modal: Add Item to Restock Request -->
+@if (isAddItemModalOpen()) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-fade-in">
+    <div class="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in">
+      <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+        <h3 class="text-base font-semibold text-gray-900">Add Restock Request Item</h3>
+        <button (click)="closeAddItemModal()" class="text-gray-400 hover:text-gray-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <div class="p-6 space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">Select Product</label>
+          <select [ngModel]="newProductId()" (ngModelChange)="newProductId.set($event)" class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300">
+            @for (p of availableProducts(); track p.product_id) {
+              <option [value]="p.product_id">{{ p.product_name }} ({{ p.category_name }})</option>
+            }
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">Suggested Order Quantity (SOQ)</label>
+          <input type="number" [ngModel]="newQuantity()" (ngModelChange)="newQuantity.set($event)" min="1"
+            class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300">
+        </div>
+
+        <div class="pt-4 border-t border-gray-100 flex justify-end space-x-3">
+          <button (click)="closeAddItemModal()" class="px-4 py-2 text-xs font-medium text-gray-600 hover:text-gray-900">Cancel</button>
+          <button (click)="submitAddItem()" class="px-5 py-2 text-xs font-medium bg-gray-900 text-white rounded-xl hover:bg-black shadow-sm">Add to Restock</button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Modal: Pending PO Order Details (Wireframe 2) -->
+@if (isPOModalOpen()) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-fade-in">
+    <div class="bg-[#F8F8F8] rounded-3xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in border border-gray-200">
+      
+      <!-- PO DETAILS (Wireframe 2) -->
+      <div class="p-6">
+        <!-- Top Row: Supplier, Type, Date -->
+        <div class="flex justify-between items-center mb-5 pb-3 border-b border-gray-200">
+          <div class="flex items-center space-x-2">
+            <span class="text-sm font-bold text-gray-900">{{ selectedPO()?.supplier }}</span>
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold"
+              [ngClass]="selectedPO()?.type === 'Pick-up' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'">
+                {{ selectedPO()?.type }}
+              </span>
+            </div>
+            <div class="text-xs text-gray-500 font-medium">
+              {{ selectedPO()?.orderDateFormatted }}
+            </div>
+          </div>
+
+          <!-- Product Line Items -->
+          <div class="space-y-2.5 mb-5">
+            @for (item of selectedPO()?.itemsList; track item.product_id) {
+              <div class="flex justify-between items-center text-xs">
+                <span class="font-medium text-gray-800 flex-1 truncate pr-2">{{ item.name }}</span>
+                <span class="w-12 text-center text-gray-500">{{ item.quantity_ordered }}</span>
+                <span class="font-semibold text-gray-900 w-20 text-right">₱ {{ item.subtotal | number:'1.2-2' }}</span>
+              </div>
+            }
+          </div>
+
+          <!-- Total Amount -->
+          <div class="flex justify-end items-center py-2 border-t border-gray-200 mb-5 font-bold text-xs text-gray-900">
+            <span class="mr-3">Total:</span>
+            <span>₱ {{ selectedPO()?.totalAmount | number:'1.2-2' }}</span>
+          </div>
+
+          <!-- Status & Estimated Arrival -->
+          <div class="bg-white rounded-2xl p-3.5 border border-gray-200 mb-6 space-y-1 text-xs">
+            <div class="text-gray-500 font-medium">
+              Estimated Arrival: <span class="text-gray-800 font-semibold ml-1">{{ selectedPO()?.estArrivalFormatted }}</span>
+            </div>
+            <div class="text-gray-500 font-medium">
+              Status: <span class="text-yellow-600 font-bold bg-yellow-50 px-2 py-0.5 rounded-md ml-1">Pending</span>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="flex justify-end items-center mt-2">
+            <button (click)="closePOModal()" class="bg-white border border-gray-300 text-gray-900 font-semibold text-xs px-6 py-2 rounded-full shadow-sm hover:bg-gray-50 transition-all btn-press">
+              Close
+            </button>
+          </div>
+        </div>
+
+    </div>
+  </div>
+}
+
+<!-- Modal: Barcode Receive Delivery -->
+@if (isBarcodeModalOpen()) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-fade-in">
+    <div class="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in">
+      <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+        <h3 class="text-base font-semibold text-gray-900 flex items-center space-x-2">
+          <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"></path></svg>
+          <span>Scan to Receive</span>
+        </h3>
+        <button (click)="closeBarcodeModal()" class="text-gray-400 hover:text-gray-600">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <div class="p-6">
+        <form [formGroup]="barcodeReceiveForm" (ngSubmit)="confirmBarcodeDelivery()">
+          
+          @if (barcodeError()) {
+            <div class="mb-4 bg-red-50 border border-red-200 text-red-700 text-xs px-3 py-2 rounded-xl font-medium">
+              {{ barcodeError() }}
+            </div>
+          }
+
+          <!-- Step 1: Barcode Input -->
+          <div class="mb-5">
+            <label class="block text-xs font-semibold text-gray-700 mb-1">Product Barcode</label>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+              </div>
+              <input type="text" formControlName="barcode" (keyup.enter)="onBarcodeScanned()" placeholder="Scan or type barcode and press Enter..." autofocus autocomplete="off"
+                class="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-sm font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+            </div>
+          </div>
+
+          <!-- Step 2: Auto-Populated Details -->
+          <div class="grid grid-cols-2 gap-4 mb-5">
+            <div>
+              <label class="block text-[10px] uppercase tracking-wider font-semibold text-gray-400 mb-1">Product Name</label>
+              <input type="text" formControlName="productName" class="w-full bg-gray-100 border border-gray-200 text-gray-600 rounded-xl px-3 py-2 text-sm font-medium cursor-not-allowed">
+            </div>
+            <div>
+              <label class="block text-[10px] uppercase tracking-wider font-semibold text-gray-400 mb-1">Category</label>
+              <input type="text" formControlName="category" class="w-full bg-gray-100 border border-gray-200 text-gray-600 rounded-xl px-3 py-2 text-sm font-medium cursor-not-allowed">
+            </div>
+          </div>
+
+          <!-- Step 3: Manual Input Fields for FEFO -->
+          <div class="grid grid-cols-2 gap-4 mb-6">
+            <div>
+              <label class="block text-[10px] uppercase tracking-wider font-semibold text-gray-500 mb-1">Quantity Received <span class="text-red-500">*</span></label>
+              <input type="number" formControlName="quantity_received" min="1" placeholder="0"
+                class="w-full bg-white border border-gray-300 rounded-xl px-3 py-2 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+            </div>
+            <div>
+              <label class="block text-[10px] uppercase tracking-wider font-semibold text-gray-500 mb-1">Batch Expiration <span class="text-red-500">*</span></label>
+              <input type="date" formControlName="batch_expiration"
+                class="w-full bg-white border border-gray-300 rounded-xl px-3 py-2 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+            </div>
+          </div>
+
+          <!-- Step 4: Submit Action -->
+          <div class="pt-4 border-t border-gray-100 flex justify-end space-x-3">
+            <button type="button" (click)="closeBarcodeModal()" class="px-5 py-2.5 text-xs font-semibold text-gray-600 hover:text-gray-900 transition-colors">Cancel</button>
+            <button type="submit" [disabled]="isProcessingBarcode() || !scannedProduct()" 
+              class="px-6 py-2.5 text-xs font-bold bg-blue-600 text-white rounded-xl hover:bg-blue-700 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2">
+              @if (isProcessingBarcode()) {
+                <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <span>Processing...</span>
+              } @else {
+                <span>Confirm Delivery</span>
+              }
+            </button>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  </div>
+}

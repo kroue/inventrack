@@ -13,7 +13,7 @@
     <!-- Drop Zone -->
     <label for="excel-upload"
       class="block border-2 border-dashed border-gray-200 rounded-2xl p-10 bg-white mb-6 hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 cursor-pointer group">
-      <input id="excel-upload" type="file" accept=".xlsx,.xls" class="hidden">
+      <input id="excel-upload" type="file" accept=".xlsx,.xls" class="hidden" (change)="onFileSelected($event)">
       <div class="flex flex-col items-center text-gray-400 group-hover:text-gray-600 transition-colors">
         <svg class="w-10 h-10 mb-3 group-hover:scale-110 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
         <p class="text-sm font-medium text-gray-600">Click to upload or drag & drop</p>
@@ -21,8 +21,37 @@
       </div>
     </label>
 
-    <button class="w-full bg-gray-800 text-white rounded-full py-3.5 font-semibold shadow-md hover:bg-black hover:shadow-lg transition-all duration-200 btn-press">
-      Sync Sales Log
+    @if (fileName) {
+      <div class="mb-6 px-4 py-3 bg-gray-100 rounded-xl text-sm font-medium text-gray-700 break-words flex items-center justify-between animate-fade-in">
+        <div class="flex items-center">
+          <svg class="w-5 h-5 text-gray-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          <span class="truncate">{{ fileName }}</span>
+        </div>
+      </div>
+    }
+
+    @if (errorMessage) {
+      <div class="mb-6 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm font-medium text-red-600 animate-fade-in text-left">
+        {{ errorMessage }}
+      </div>
+    }
+
+    @if (successMessage) {
+      <div class="mb-6 px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-sm font-medium text-green-600 animate-fade-in text-left">
+        {{ successMessage }}
+      </div>
+    }
+
+    <button 
+      (click)="syncSalesLog()"
+      [disabled]="isSyncing || !selectedFile"
+      [ngClass]="isSyncing || !selectedFile ? 'opacity-50 cursor-not-allowed' : 'hover:bg-black hover:shadow-lg'"
+      class="w-full bg-gray-800 text-white rounded-full py-3.5 font-semibold shadow-md transition-all duration-200 btn-press">
+      @if (isSyncing) {
+        <span>Syncing...</span>
+      } @else {
+        <span>Sync Sales Log</span>
+      }
     </button>
   </div>
 </div>

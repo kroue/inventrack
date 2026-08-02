@@ -1,26 +1,46 @@
 <div class="flex-1 flex flex-col h-full overflow-hidden p-6 page-enter w-full">
 
-  <!-- Search Bar -->
-  <div class="relative w-full max-w-3xl mb-7 animate-fade-in-up delay-50">
-    <input
-      type="text"
-      [(ngModel)]="searchQuery"
-      class="w-full bg-[#F2F2F2] border border-transparent rounded-full py-3.5 pl-6 pr-12 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:bg-white transition-all shadow-sm"
-      placeholder="search by product name or category..."
-    >
-    <div class="absolute inset-y-0 right-4 flex items-center pointer-events-none">
-      <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-      </svg>
+  <!-- Header / Controls -->
+  <div class="flex justify-between items-center w-full mb-7 animate-fade-in-up delay-50">
+    <!-- Search Bar -->
+    <div class="relative flex-1 max-w-3xl">
+      <input
+        type="text"
+        [(ngModel)]="searchQuery"
+        class="w-full bg-[#F2F2F2] border border-transparent rounded-full py-3.5 pl-6 pr-12 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:bg-white transition-all shadow-sm"
+        placeholder="search by product name or category..."
+      >
+      <div class="absolute inset-y-0 right-4 flex items-center pointer-events-none">
+        <svg class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+      </div>
+    </div>
+
+    <!-- View Mode Toggle -->
+    <div class="flex bg-[#F2F2F2] rounded-full p-1 shadow-sm border border-gray-100 ml-4 flex-shrink-0">
+      <button (click)="viewMode.set('Grid')" 
+        class="flex items-center justify-center px-4 py-2 text-xs font-medium rounded-full transition-all btn-press"
+        [ngClass]="viewMode() === 'Grid' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'">
+        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+        Grid
+      </button>
+      <button (click)="viewMode.set('List')" 
+        class="flex items-center justify-center px-4 py-2 text-xs font-medium rounded-full transition-all btn-press"
+        [ngClass]="viewMode() === 'List' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'">
+        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+        List
+      </button>
     </div>
   </div>
 
-  <!-- Product Grid -->
+  <!-- Product Grid / List -->
   <div class="flex-1 overflow-y-auto custom-scrollbar pb-10">
+    @if (viewMode() === 'Grid') {
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pr-2">
 
       <!-- Add Product Card -->
-      <div class="bg-[#F8F8F8] border-2 border-dashed border-gray-200 rounded-3xl h-[260px] flex items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-all duration-300 group animate-scale-in">
+      <div (click)="openAddModal()" class="bg-[#F8F8F8] border-2 border-dashed border-gray-200 rounded-3xl h-[260px] flex items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-gray-300 transition-all duration-300 group animate-scale-in">
         <div class="flex flex-col items-center text-gray-400 group-hover:text-gray-600 transition-colors">
           <svg class="w-9 h-9 mb-2 group-hover:scale-110 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v16m8-8H4"></path>
@@ -48,9 +68,9 @@
               </div>
               <span class="w-2.5 h-2.5 rounded-full block shadow-sm flex-shrink-0 mt-0.5"
                 [ngClass]="{
-                  'bg-green-400': product.status === 'Available',
-                  'bg-yellow-400': product.status === 'Low Stock',
-                  'bg-red-400': product.status === 'Out of Stock'
+                  'bg-green-400': !product.needs_restock && (product.stock_quantity ?? 0) > 0,
+                  'bg-yellow-400': product.needs_restock && (product.stock_quantity ?? 0) > 0,
+                  'bg-red-400': (product.stock_quantity ?? 0) <= 0
                 }"></span>
             </div>
 
@@ -58,9 +78,9 @@
               <span class="text-[18px] font-semibold text-gray-900">₱{{ product.price | number:'1.2-2' }}</span>
               <div class="bg-white border border-gray-200 shadow-sm rounded-full px-3 py-1 text-[10px] font-medium"
                 [ngClass]="{
-                  'text-gray-600': product.status === 'Available',
-                  'text-yellow-600': product.status === 'Low Stock',
-                  'text-red-500': product.status === 'Out of Stock'
+                  'text-gray-600': !product.needs_restock && (product.stock_quantity ?? 0) > 0,
+                  'text-yellow-600': product.needs_restock && (product.stock_quantity ?? 0) > 0,
+                  'text-red-500': (product.stock_quantity ?? 0) <= 0
                 }">
                 {{ stockMap[product.product_id] }} in stock
               </div>
@@ -69,10 +89,10 @@
 
           <!-- Hover Action Buttons -->
           <div class="absolute top-4 right-4 flex space-x-1 opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all duration-200">
-            <button class="bg-white rounded-full p-1.5 shadow-md border border-gray-100 hover:bg-gray-50 transition-colors btn-press" (click)="$event.stopPropagation()">
+            <button (click)="openEditModal(product); $event.stopPropagation()" class="bg-white rounded-full p-1.5 shadow-md border border-gray-100 hover:bg-gray-50 transition-colors btn-press">
               <svg class="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
             </button>
-            <button class="bg-white rounded-full p-1.5 shadow-md border border-gray-100 hover:bg-red-50 transition-colors btn-press" (click)="$event.stopPropagation()">
+            <button (click)="deleteProduct(product.product_id); $event.stopPropagation()" class="bg-white rounded-full p-1.5 shadow-md border border-gray-100 hover:bg-red-50 transition-colors btn-press">
               <svg class="w-3.5 h-3.5 text-gray-400 hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
             </button>
           </div>
@@ -86,5 +106,157 @@
         </div>
       }
     </div>
+    } @else {
+    <!-- List View -->
+    <div class="bg-white border border-gray-200 rounded-3xl overflow-hidden pr-2 mr-2">
+      <div class="grid grid-cols-6 text-[11px] font-semibold text-gray-500 uppercase tracking-wider px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+        <div class="col-span-2">Product</div>
+        <div>Barcode</div>
+        <div>Price</div>
+        <div>Stock Status</div>
+        <div class="text-right">Actions</div>
+      </div>
+      
+      <div class="divide-y divide-gray-100">
+        <div (click)="openAddModal()" class="flex items-center px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors group">
+          <div class="w-8 h-8 rounded-xl bg-gray-100 flex items-center justify-center mr-4 group-hover:bg-gray-200 transition-colors">
+            <svg class="w-4 h-4 text-gray-400 group-hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+          </div>
+          <span class="text-sm font-medium text-gray-500 group-hover:text-gray-800 transition-colors">Add New Product...</span>
+        </div>
+
+        @for (product of filteredProducts; track product.product_id; let i = $index) {
+          <div class="grid grid-cols-6 items-center px-6 py-4 hover:bg-gray-50 transition-colors group animate-fade-in-up" [ngStyle]="{'animation-delay': (i * 30) + 'ms'}">
+            <div class="col-span-2 flex items-center pr-4">
+              <div class="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center mr-4 flex-shrink-0">
+                 <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                 </svg>
+              </div>
+              <div class="flex flex-col min-w-0">
+                <span class="font-semibold text-gray-900 text-sm truncate">{{ product.product_name }}</span>
+                <span class="text-xs text-gray-400 mt-0.5 truncate">{{ product.category_name }}</span>
+              </div>
+            </div>
+            <div class="text-sm text-gray-500 font-mono">{{ product.barcode || '-' }}</div>
+            <div class="text-sm font-semibold text-gray-900">₱{{ product.price | number:'1.2-2' }}</div>
+            <div>
+              <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold"
+                [ngClass]="{
+                  'bg-green-100 text-green-700': !product.needs_restock && (product.stock_quantity ?? 0) > 0,
+                  'bg-yellow-100 text-yellow-700': product.needs_restock && (product.stock_quantity ?? 0) > 0,
+                  'bg-red-100 text-red-700': (product.stock_quantity ?? 0) <= 0
+                }">
+                {{ stockMap[product.product_id] || 0 }} in stock
+              </span>
+            </div>
+            <div class="text-right flex justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button (click)="openEditModal(product)" class="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors btn-press">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+              </button>
+              <button (click)="deleteProduct(product.product_id)" class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors btn-press">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              </button>
+            </div>
+          </div>
+        }
+        
+        @if (filteredProducts.length === 0) {
+          <div class="flex flex-col items-center justify-center py-20 text-gray-400 animate-fade-in">
+            <svg class="w-12 h-12 mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            <p class="text-sm font-medium">No products found</p>
+          </div>
+        }
+      </div>
+    </div>
+    }
   </div>
 </div>
+
+<!-- Add/Edit Product Modal -->
+@if (isModalOpen()) {
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-fade-in">
+  <div class="bg-white rounded-3xl shadow-xl w-full max-w-xl overflow-hidden animate-scale-in">
+    <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+      <h2 class="text-lg font-semibold text-gray-900">
+        {{ modalMode() }} Product
+      </h2>
+      <button (click)="closeModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+      </button>
+    </div>
+    
+    <div class="p-6">
+      <!-- ADD/EDIT MODE -->
+      <form (ngSubmit)="saveProduct()" (keydown.enter)="$event.preventDefault()" #productForm="ngForm" class="space-y-4">
+        
+        @if (errorMessage()) {
+          <div class="bg-red-50 text-red-600 p-3 rounded-xl text-sm border border-red-100">
+            {{ errorMessage() }}
+          </div>
+        }
+
+        <div class="grid grid-cols-2 gap-4">
+          <div class="col-span-2">
+            <label class="block text-xs font-medium text-gray-700 mb-1">Product Name</label>
+            <input type="text" [(ngModel)]="currentProduct().product_name" name="name" required
+              class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+          </div>
+          
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Category</label>
+            <input type="text" [(ngModel)]="currentProduct().category_name" name="category" required
+              class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+          </div>
+          
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Barcode</label>
+            <input type="text" [(ngModel)]="currentProduct().barcode" name="barcode"
+              placeholder="Use Scanner or Input Manually"
+              class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+          </div>
+          
+          <div class="col-span-2">
+            <label class="block text-xs font-medium text-gray-700 mb-1">Description</label>
+            <textarea [(ngModel)]="currentProduct().description" name="description" rows="2"
+              class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all"></textarea>
+          </div>
+          
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Wholesale Cost (₱)</label>
+            <input type="number" step="0.01" [(ngModel)]="currentProduct().cost_price" name="cost_price"
+              placeholder="0.00"
+              class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Retail Price (₱)</label>
+            <input type="number" step="0.01" [(ngModel)]="currentProduct().price" name="price" required
+              class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+          </div>
+          
+          @if (modalMode() === 'Add') {
+            <div>
+              <label class="block text-xs font-medium text-gray-700 mb-1">Initial Stock</label>
+              <input type="number" [(ngModel)]="currentProduct().initialStock" name="initialStock" required min="0"
+                class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+            </div>
+          }
+        </div>
+
+        <div class="mt-6 flex justify-end space-x-3 pt-4 border-t border-gray-100">
+          <button type="button" (click)="closeModal()" class="px-5 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
+            Cancel
+          </button>
+          <button type="submit" [disabled]="productForm.invalid || isSubmitting()"
+            class="px-6 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50 shadow-sm">
+            {{ isSubmitting() ? 'Saving...' : 'Save Product' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+}

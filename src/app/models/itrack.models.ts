@@ -13,9 +13,12 @@ export interface Product {
   category_name: string;
   barcode: string;
   description?: string;
+  cost_price?: number;
   price: number;
   discount_rate: number;
   status: 'Available' | 'Low Stock' | 'Out of Stock';
+  stock_quantity?: number;
+  needs_restock?: boolean;
 }
 
 export interface Inventory {

@@ -28,7 +28,7 @@
     </div>
 
     <!-- Table Rows -->
-    @for (user of users; track user.name; let i = $index) {
+    @for (user of users(); track user.name; let i = $index) {
       <div class="grid grid-cols-5 items-center py-4 px-4 border-b border-gray-100 text-sm text-gray-700 table-row-hover rounded-xl animate-fade-in-up"
            [ngStyle]="{'animation-delay': (100 + i * 60) + 'ms'}">
         <div class="col-span-1 flex items-center space-x-2">

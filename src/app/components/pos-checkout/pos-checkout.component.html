@@ -10,9 +10,9 @@
         type="text"
         [(ngModel)]="searchQuery"
         (ngModelChange)="onSearchChange()"
-        (keyup.enter)="simulateScan(searchQuery)"
-        class="w-full bg-[#F2F2F2] border border-transparent rounded-full py-3.5 pl-6 pr-12 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:bg-white transition-all shadow-sm"
-        placeholder="search by product name or category..."
+        (keydown.enter)="handleScanEnter($event)"
+        class="pos-search-input w-full bg-[#F2F2F2] border border-transparent rounded-full py-3.5 pl-6 pr-12 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:bg-white transition-all shadow-sm"
+        placeholder="Use Barcode Scanner or type product name/barcode..."
         autofocus
       >
       <div class="absolute inset-y-0 right-4 flex items-center pointer-events-none">
@@ -45,14 +45,15 @@
                 </div>
                 <div class="flex-shrink-0 mt-0.5">
                   <span class="w-2.5 h-2.5 rounded-full block shadow-sm"
-                    [ngClass]="product.status === 'Available' ? 'bg-green-400' : 'bg-red-400'"></span>
+                    [ngClass]="(product.stock_quantity ?? 0) <= 0 ? 'bg-red-400' : (product.needs_restock ? 'bg-yellow-400' : 'bg-green-400')"></span>
                 </div>
               </div>
 
               <div class="mt-auto flex justify-between items-end">
                 <span class="text-[18px] font-semibold text-gray-900">₱{{ product.price | number:'1.2-2' }}</span>
-                <div class="bg-white border border-gray-200 shadow-sm rounded-full px-3 py-1 text-[10px] font-medium text-gray-600">
-                  {{ product.product_id === 'P001' ? '100' : (product.product_id === 'P002' ? '50' : '200') }} in stock
+                <div class="bg-white border border-gray-200 shadow-sm rounded-full px-3 py-1 text-[10px] font-medium"
+                  [ngClass]="(product.stock_quantity ?? 0) <= 0 ? 'text-red-500' : (product.needs_restock ? 'text-yellow-600' : 'text-gray-600')">
+                  {{ product.stock_quantity ?? 0 }} in stock
                 </div>
               </div>
             </div>
@@ -214,17 +215,101 @@
         </div>
       }
 
+      @if (validationError()) {
+        <div class="mb-3 p-3 bg-red-50 border border-red-200/80 rounded-xl text-xs text-red-600 flex items-center space-x-2 animate-fade-in">
+          <svg class="w-4 h-4 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          <span class="flex-1 font-medium">{{ validationError() }}</span>
+        </div>
+      }
+
       <button
         (click)="checkout()"
-        [disabled]="cart.length === 0"
+        [disabled]="cart.length === 0 || isLoading()"
         class="w-full py-3.5 rounded-full text-sm font-semibold transition-all duration-200 btn-press"
         [ngClass]="cart.length === 0 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-gray-800 text-white hover:bg-black shadow-md hover:shadow-lg'">
-        Checkout & Print Receipt
+        @if (isLoading()) {
+          <span>Processing Sale...</span>
+        } @else {
+          <span>Checkout & Print Receipt</span>
+        }
       </button>
     </div>
   </div>
 
 </div>
+
+<!-- IN-APP ORDER CONFIRMATION MODAL -->
+@if (showSuccessModal() && completedOrder()) {
+  <div class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-100 animate-scale-in relative overflow-hidden">
+      
+      <!-- Decorative Top Accent -->
+      <div class="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-emerald-400 via-teal-500 to-green-500"></div>
+
+      <!-- Header & Icon -->
+      <div class="flex flex-col items-center text-center mt-2 mb-5">
+        <div class="w-16 h-16 rounded-full bg-emerald-50 border-4 border-emerald-100 flex items-center justify-center text-emerald-500 mb-3 shadow-inner">
+          <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <h3 class="text-xl font-bold text-gray-900">Checkout Successful</h3>
+        <p class="text-xs text-gray-500 mt-1">Transaction completed and inventory updated</p>
+
+        <!-- Confirmation Code Badge -->
+        <div class="mt-3 bg-emerald-50 border border-emerald-200/80 rounded-full px-4 py-1.5 flex items-center gap-2">
+          <span class="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider">Confirmation Code:</span>
+          <span class="text-xs font-bold text-emerald-900 font-mono select-all">{{ completedOrder()?.code }}</span>
+        </div>
+      </div>
+
+      <!-- Order Details Summary -->
+      <div class="bg-[#F8F9FA] rounded-2xl p-4 border border-gray-100 space-y-3 text-xs mb-5">
+        <div class="flex justify-between items-center text-gray-500 border-b border-gray-200/60 pb-2">
+          <span>Date & Time</span>
+          <span class="font-medium text-gray-700">{{ completedOrder()?.timestamp | date:'short' }}</span>
+        </div>
+
+        <div class="flex justify-between items-center text-gray-500 border-b border-gray-200/60 pb-2">
+          <span>Payment Method</span>
+          <span class="font-semibold text-gray-800">{{ completedOrder()?.paymentMethod }}</span>
+        </div>
+
+        <!-- Purchased items list -->
+        <div class="max-h-32 overflow-y-auto custom-scrollbar space-y-1.5 py-1">
+          @for (item of completedOrder()?.items; track item.product.product_id) {
+            <div class="flex justify-between text-gray-700">
+              <span class="truncate pr-2">{{ item.quantity }}x {{ item.product.product_name }}</span>
+              <span class="font-medium flex-shrink-0">₱{{ item.subtotal | number:'1.2-2' }}</span>
+            </div>
+          }
+        </div>
+
+        <div class="border-t border-gray-200/80 pt-2 flex justify-between items-center text-sm">
+          <span class="font-bold text-gray-800">Total Paid</span>
+          <span class="font-bold text-emerald-600 text-lg">₱{{ completedOrder()?.total | number:'1.2-2' }}</span>
+        </div>
+
+        @if (completedOrder()?.paymentMethod === 'Cash') {
+          <div class="flex justify-between items-center text-gray-500 text-[11px] pt-1">
+            <span>Cash Rendered: ₱{{ completedOrder()?.cashRendered | number:'1.2-2' }}</span>
+            <span class="font-semibold text-gray-800">Change: ₱{{ completedOrder()?.change | number:'1.2-2' }}</span>
+          </div>
+        }
+      </div>
+
+      <!-- Action Button -->
+      <div class="flex gap-3">
+        <button
+          (click)="closeSuccessModal()"
+          class="flex-1 py-3 rounded-full bg-gray-900 hover:bg-black text-white text-xs font-semibold shadow-md transition-all btn-press">
+          Done & New Sale
+        </button>
+      </div>
+
+    </div>
+  </div>
+}
 
 <style>
   .bar-inner { transform-origin: bottom; }

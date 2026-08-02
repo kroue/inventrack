@@ -50,7 +50,7 @@ export class AuthService {
 
   // ─── Public API ──────────────────────────────────────────
 
-  async login(email: string, password: string): Promise<{ error: string | null }> {
+  async signIn(email: string, password: string): Promise<{ error: string | null }> {
     const { data, error } = await this.supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
@@ -64,7 +64,7 @@ export class AuthService {
     return { error: null };
   }
 
-  async logout(): Promise<void> {
+  async signOut(): Promise<void> {
     await this.supabase.auth.signOut();
     this._currentUser.set(null);
     this.router.navigate(['/login']);
@@ -100,35 +100,86 @@ export class AuthService {
   }
 
   /**
-   * Fetch the user's role and display name from the `profiles` table.
+   * Fetch the user's role and display name from the `users` table.
    *
-   * The profiles table must have columns:
-   *   id          uuid  (FK → auth.users.id)
+   * The users table has columns:
+   *   user_id     uuid  (FK → auth.users.id)
    *   role        text  ('Admin' | 'Cashier')
-   *   display_name text
-   *
-   * See: src/sql/setup-auth.sql for the full schema.
+   *   full_name   text
    */
   private async _loadUserProfile(user: User): Promise<void> {
-    const { data: profile, error } = await this.supabase
-      .from('profiles')
-      .select('role, display_name')
-      .eq('id', user.id)
-      .single();
-
-    if (error || !profile) {
-      // Profile not found — sign out for safety
-      console.error('[AuthService] Could not load profile:', error?.message);
-      await this.supabase.auth.signOut();
-      this._currentUser.set(null);
-      return;
+    interface ProfileRecord {
+      role?: string;
+      full_name?: string;
+      user_id?: string;
     }
+
+    // 1. Try fetching by user_id using maybeSingle() to avoid 406 errors when missing
+    let profile: ProfileRecord | null = null;
+
+    const { data: profileById } = await this.supabase
+      .from('users')
+      .select('role, full_name, user_id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (profileById) {
+      profile = profileById;
+    }
+
+    // 2. If not found by user_id, fallback to matching by email
+    if (!profile && user.email) {
+      const { data: profileByEmail } = await this.supabase
+        .from('users')
+        .select('role, full_name, user_id')
+        .eq('email', user.email)
+        .maybeSingle();
+
+      if (profileByEmail) {
+        profile = profileByEmail;
+        // Sync user_id in public.users to match auth.users.id
+        await this.supabase
+          .from('users')
+          .update({ user_id: user.id })
+          .eq('email', user.email);
+      }
+    }
+
+    // 3. If profile still not found in public.users, auto-create a user profile
+    if (!profile && user.email) {
+      const defaultRole: UserRole = user.email.toLowerCase().includes('admin') ? 'Admin' : 'Cashier';
+      const fullName = user.user_metadata?.['full_name'] ?? user.email;
+
+      const { data: newProfile, error: insertError } = await this.supabase
+        .from('users')
+        .insert({
+          user_id: user.id,
+          email: user.email,
+          full_name: fullName,
+          role: defaultRole
+        })
+        .select('role, full_name')
+        .maybeSingle();
+
+      if (!insertError && newProfile) {
+        profile = newProfile;
+      } else {
+        // Fallback in-memory profile if insert is constrained
+        profile = {
+          role: defaultRole,
+          full_name: fullName
+        };
+      }
+    }
+
+    const role = (profile?.role as UserRole) ?? 'Cashier';
+    const displayName = profile?.full_name ?? user.email ?? 'User';
 
     this._currentUser.set({
       id:          user.id,
       email:       user.email ?? '',
-      role:        profile['role'] as UserRole,
-      displayName: profile['display_name'] ?? user.email ?? 'User',
+      role:        role,
+      displayName: displayName,
     });
   }
 }
