@@ -77,6 +77,8 @@ gcloud/
 
 # Database dumps & local DB files
 *.sql
+!supabase/migrations/*.sql
+!supabase/seed.sql
 *.dump
 *.sqlite
 *.db

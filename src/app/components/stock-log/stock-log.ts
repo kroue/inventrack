@@ -55,7 +55,7 @@ export class StockLog implements OnInit {
       if (error) throw error;
 
       if (data) {
-        this.stockLogs.set(data.map(log => ({
+        const rawLogs = data.map(log => ({
           id: log.log_id,
           product_id: log.product_id,
           product: (log.products as any)?.product_name || 'Unknown Product',
@@ -64,7 +64,20 @@ export class StockLog implements OnInit {
           date: new Date(log.log_date || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
           remarks: log.remarks || 'Stock transaction',
           processed_by: (log.users as any)?.full_name || 'System'
-        })));
+        }));
+
+        this.stockLogs.set(rawLogs.map(log => {
+          let returnedQty = 0;
+          if (log.type === 'IN' || log.type === 'OUT') {
+            returnedQty = rawLogs
+              .filter(r => r.remarks.includes(log.id))
+              .reduce((sum, r) => sum + r.quantity, 0);
+          }
+          return {
+            ...log,
+            available_quantity: log.quantity - returnedQty
+          };
+        }));
       }
     } catch (err: any) {
       console.error('Error loading stock logs', err);
@@ -78,7 +91,7 @@ export class StockLog implements OnInit {
     if (log.type !== 'IN' && log.type !== 'OUT') return;
     
     this.selectedLogId.set(log.id);
-    this.maxReturnQuantity.set(log.quantity);
+    this.maxReturnQuantity.set(log.available_quantity);
     this.isReturnModalOpen.set(true);
     this.errorMessage.set(null);
     
@@ -87,7 +100,7 @@ export class StockLog implements OnInit {
     this.returnForm.set({
       productId: log.product_id,
       returnType: returnType,
-      quantity: log.quantity,
+      quantity: log.available_quantity,
       remarks: `Reversal of log: ${log.id}`
     });
     

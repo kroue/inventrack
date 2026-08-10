@@ -29,7 +29,13 @@
       <div class="grid grid-cols-7 items-center py-4 px-4 border-b border-gray-100 text-sm text-gray-700 table-row-hover rounded-xl animate-fade-in-up"
            [ngStyle]="{'animation-delay': (i * 40) + 'ms'}">
         <div class="col-span-1 font-semibold text-gray-900 truncate" [title]="log.product">{{ log.product }}</div>
-        <div class="col-span-1 text-center font-bold tabular-nums text-gray-800">{{ log.quantity }}</div>
+        <div class="col-span-1 text-center font-bold tabular-nums text-gray-800">
+          @if (log.type === 'IN' || log.type === 'OUT') {
+            {{ log.available_quantity }}
+          } @else {
+            {{ log.quantity }}
+          }
+        </div>
         <div class="col-span-1 text-center">
           <span class="inline-block px-3 py-0.5 rounded-full text-[10px] font-bold"
             [ngClass]="{
@@ -44,7 +50,7 @@
         <div class="col-span-1 pl-4 text-gray-600 text-xs truncate" [title]="log.remarks">{{ log.remarks || '—' }}</div>
         <div class="col-span-1 text-center font-medium text-xs text-gray-800">{{ log.processed_by }}</div>
         <div class="col-span-1 text-right">
-          @if (log.type === 'IN' || log.type === 'OUT') {
+          @if ((log.type === 'IN' || log.type === 'OUT') && log.available_quantity > 0) {
             <button (click)="openSpecificReturnModal(log)" class="text-[10px] font-bold text-gray-600 hover:text-gray-900 bg-white border border-gray-200 hover:border-gray-400 rounded-lg px-2.5 py-1.5 shadow-sm transition-all">
               Return
             </button>

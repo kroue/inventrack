@@ -37,14 +37,10 @@ export class SupabaseService {
    * Helper to execute the POS checkout transaction via RPC
    */
   async processPosSale(
-    userId: string | null,
-    totalAmount: number,
     paymentMethod: 'Cash' | 'Gcash',
     items: any[]
   ) {
     const { data, error } = await this.client.rpc('process_pos_sale', {
-      p_user_id: userId,
-      p_total_amount: totalAmount,
       p_payment_method: paymentMethod,
       p_items: items
     });

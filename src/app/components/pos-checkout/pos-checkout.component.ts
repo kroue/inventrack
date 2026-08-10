@@ -310,20 +310,13 @@ export class PosCheckoutComponent implements OnInit {
 
     try {
       this.isLoading.set(true);
-      const { data: userData } = await this.supabaseService.client.auth.getUser();
-      const userId = userData?.user?.id || null;
-
       const itemsForRpc = this.cart.map(item => ({
         product_id: item.product.product_id,
         batch_id: item.batch.batch_id,
-        quantity: item.quantity,
-        unit_price: item.originalPrice,
-        discount_applied: item.discountApplied
+        quantity: item.quantity
       }));
 
       const saleId = await this.supabaseService.processPosSale(
-        userId,
-        this.cartTotal,
         this.paymentMethod,
         itemsForRpc
       );
