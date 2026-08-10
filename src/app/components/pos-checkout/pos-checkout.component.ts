@@ -54,6 +54,22 @@ export class PosCheckoutComponent implements OnInit {
   
   cart: CartItem[] = [];
   
+  showClearCartModal = signal<boolean>(false);
+  
+  clearCart() {
+    if (this.cart.length === 0) return;
+    this.showClearCartModal.set(true);
+  }
+
+  executeClearCart() {
+    this.cart = [];
+    this.showClearCartModal.set(false);
+  }
+
+  cancelClearCart() {
+    this.showClearCartModal.set(false);
+  }
+  
   paymentMethod: 'Cash' | 'Gcash' = 'Cash';
   cashRendered: number = 0;
 

@@ -19,6 +19,8 @@ export interface Product {
   status: 'Available' | 'Low Stock' | 'Out of Stock';
   stock_quantity?: number;
   needs_restock?: boolean;
+  supplier_id?: string;
+  image_url?: string;
 }
 
 export interface Inventory {
@@ -69,7 +71,7 @@ export interface Suppliers {
   supplier_name: string;
   contact_person: string;
   phone: string;
-  email: string;
+  email?: string;
   address: string;
 }
 

@@ -7,24 +7,26 @@
         <h2 class="text-lg font-semibold text-gray-800">Stock Log Audit Trail</h2>
         <p class="text-xs text-gray-400 mt-0.5">Tracks all stock changes across Deliveries, Pick-ups, POS Sales Checkouts, and Adjustments.</p>
       </div>
-      <div class="flex space-x-2">
+      <div class="flex space-x-2 items-center">
         <span class="bg-blue-100 text-blue-700 text-[11px] font-semibold px-3 py-1 rounded-full">Total IN: {{ totalIn() }}</span>
         <span class="bg-red-100 text-red-700 text-[11px] font-semibold px-3 py-1 rounded-full">Total OUT: {{ totalOut() }}</span>
       </div>
     </div>
 
     <!-- Table Header -->
-    <div class="grid grid-cols-5 text-xs font-semibold text-gray-400 uppercase tracking-widest pb-4 px-4 border-b border-gray-200">
+    <div class="grid grid-cols-7 text-xs font-semibold text-gray-400 uppercase tracking-widest pb-4 px-4 border-b border-gray-200">
       <div class="col-span-1">Product</div>
       <div class="col-span-1 text-center">Quantity</div>
       <div class="col-span-1 text-center">Change Type</div>
       <div class="col-span-1 text-center">Date & Time</div>
       <div class="col-span-1 pl-4">Remarks / Source</div>
+      <div class="col-span-1 text-center">Processed By</div>
+      <div class="col-span-1 text-right">Actions</div>
     </div>
 
     <!-- Table Body -->
     @for (log of stockLogs(); track log.id; let i = $index) {
-      <div class="grid grid-cols-5 items-center py-4 px-4 border-b border-gray-100 text-sm text-gray-700 table-row-hover rounded-xl animate-fade-in-up"
+      <div class="grid grid-cols-7 items-center py-4 px-4 border-b border-gray-100 text-sm text-gray-700 table-row-hover rounded-xl animate-fade-in-up"
            [ngStyle]="{'animation-delay': (i * 40) + 'ms'}">
         <div class="col-span-1 font-semibold text-gray-900 truncate" [title]="log.product">{{ log.product }}</div>
         <div class="col-span-1 text-center font-bold tabular-nums text-gray-800">{{ log.quantity }}</div>
@@ -39,7 +41,15 @@
           </span>
         </div>
         <div class="col-span-1 text-center text-gray-500 text-xs font-medium">{{ log.date || '—' }}</div>
-        <div class="col-span-1 pl-4 text-gray-600 text-xs">{{ log.remarks || '—' }}</div>
+        <div class="col-span-1 pl-4 text-gray-600 text-xs truncate" [title]="log.remarks">{{ log.remarks || '—' }}</div>
+        <div class="col-span-1 text-center font-medium text-xs text-gray-800">{{ log.processed_by }}</div>
+        <div class="col-span-1 text-right">
+          @if (log.type === 'IN' || log.type === 'OUT') {
+            <button (click)="openSpecificReturnModal(log)" class="text-[10px] font-bold text-gray-600 hover:text-gray-900 bg-white border border-gray-200 hover:border-gray-400 rounded-lg px-2.5 py-1.5 shadow-sm transition-all">
+              Return
+            </button>
+          }
+        </div>
       </div>
     }
 
@@ -52,3 +62,64 @@
     }
   </div>
 </div>
+
+<!-- Return Modal -->
+@if (isReturnModalOpen()) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-fade-in">
+    <div class="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in">
+      <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+        <h2 class="text-lg font-semibold text-gray-900">Log Product Return</h2>
+        <button (click)="closeReturnModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      
+      <div class="p-6">
+        @if (errorMessage()) {
+          <div class="bg-red-50 text-red-600 p-3 rounded-xl text-sm border border-red-100 mb-4">
+            {{ errorMessage() }}
+          </div>
+        }
+  
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Product</label>
+            <select [(ngModel)]="returnForm().productId" disabled class="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all opacity-70">
+              @for (prod of products(); track prod.product_id) {
+                <option [value]="prod.product_id">{{ prod.product_name }}</option>
+              }
+            </select>
+          </div>
+  
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Return Type</label>
+            <select [(ngModel)]="returnForm().returnType" disabled class="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all opacity-70">
+              <option value="Customer Return">Customer Return (In)</option>
+              <option value="Return to Supplier">Return to Supplier (Out)</option>
+            </select>
+          </div>
+  
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Quantity (Max: {{ maxReturnQuantity() }})</label>
+            <input type="number" [(ngModel)]="returnForm().quantity" min="1" [max]="maxReturnQuantity()" class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+          </div>
+  
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Remarks</label>
+            <textarea [(ngModel)]="returnForm().remarks" rows="2" placeholder="Reason for return..." class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all"></textarea>
+          </div>
+        </div>
+  
+        <div class="mt-6 flex justify-end space-x-3 pt-4 border-t border-gray-100">
+          <button type="button" (click)="closeReturnModal()" class="px-5 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
+            Cancel
+          </button>
+          <button type="button" (click)="logReturn()" [disabled]="isSubmitting()"
+            class="px-6 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50 shadow-sm">
+            {{ isSubmitting() ? 'Saving...' : 'Confirm Return' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  }

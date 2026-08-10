@@ -138,6 +138,7 @@ export class Procurement implements OnInit {
         dateDelivered: d.delivery_date,
         supplier: d.purchase_orders?.suppliers?.supplier_name || 'Unknown',
         fulfillment: d.purchase_orders?.fulfillment_type || 'Unknown',
+        received_by_name: d.users?.full_name || 'System'
       })));
 
     } catch (err) {
@@ -273,7 +274,7 @@ export class Procurement implements OnInit {
       return;
     }
     try {
-      const prods = await this.procurementService.getAllProducts();
+      const prods = await this.procurementService.getAllProducts(this.selectedSupplierId());
       this.availableProducts.set(prods);
       if (prods.length > 0) {
         this.newProductId.set(prods[0].product_id);
@@ -321,7 +322,7 @@ export class Procurement implements OnInit {
 
     try {
       this.isLoading.set(true);
-      const lowStockItems = await this.procurementService.autoGenerateRestockRequests();
+      const lowStockItems = await this.procurementService.autoGenerateRestockRequests(suppId);
       const mapped = lowStockItems.map((r: any) => ({
         ...r,
         name: r.products?.product_name || 'Unknown Product',

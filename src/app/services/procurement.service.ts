@@ -1,11 +1,13 @@
 import { Injectable, inject } from '@angular/core';
 import { SupabaseService } from './supabase.service';
+import { AuthService } from './auth.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class ProcurementService {
   private supabase = inject(SupabaseService);
+  private authService = inject(AuthService);
 
   async getSuppliers() {
     const { data, error } = await this.supabase.client
@@ -32,11 +34,17 @@ export class ProcurementService {
     return data;
   }
 
-  async getAllProducts() {
-    const { data, error } = await this.supabase.client
+  async getAllProducts(supplierId?: string) {
+    let query = this.supabase.client
       .from('products')
       .select('*')
       .order('product_name');
+      
+    if (supplierId) {
+      query = query.eq('supplier_id', supplierId);
+    }
+    
+    const { data, error } = await query;
     if (error) throw error;
     return data || [];
   }
@@ -61,13 +69,19 @@ export class ProcurementService {
     return data || [];
   }
 
-  async autoGenerateRestockRequests() {
+  async autoGenerateRestockRequests(supplierId?: string) {
     // 1. Fetch products with their inventory levels
-    const { data: prods } = await this.supabase.client
+    let query = this.supabase.client
       .from('products')
       .select('*, inventory(*)');
       
-    if (!prods || prods.length === 0) return [];
+    if (supplierId) {
+      query = query.eq('supplier_id', supplierId);
+    }
+    
+    const { data: prods, error } = await query;
+      
+    if (error || !prods || prods.length === 0) return [];
 
     // 2. Filter for items that are Low Stock or Out of Stock
     // Low Stock condition: current stock <= reorder_point OR status is Low Stock/Out of Stock
@@ -133,7 +147,7 @@ export class ProcurementService {
   async getDeliveries() {
     const { data, error } = await this.supabase.client
       .from('deliveries')
-      .select('*, purchase_orders(*, suppliers(*)), delivery_items(*, products(*))')
+      .select('*, purchase_orders(*, suppliers(*)), delivery_items(*, products(*)), users(full_name)')
       .order('delivery_date', { ascending: false });
     if (error) throw error;
     return data || [];
@@ -211,7 +225,7 @@ export class ProcurementService {
       .insert({
         purchase_order_id: poId,
         status: 'Received',
-        received_by: null
+        received_by: this.authService.currentUser()?.id || null
       })
       .select()
       .single();
@@ -269,7 +283,8 @@ export class ProcurementService {
           change_type: 'IN',
           remarks: poData.fulfillment_type === 'Pick-up' 
             ? 'Stock Received via Supplier Pick-up' 
-            : 'Stock Received via Supplier Delivery'
+            : 'Stock Received via Supplier Delivery',
+          user_id: this.authService.currentUser()?.id || null
         });
 
       // Update Inventory
@@ -330,7 +345,7 @@ export class ProcurementService {
         .insert({
           purchase_order_id: po.purchase_order_id,
           status: 'Received',
-          received_by: null
+          received_by: this.authService.currentUser()?.id || null
         })
         .select()
         .single();
@@ -386,7 +401,8 @@ export class ProcurementService {
         delivery_id: delivery.delivery_id,
         quantity: quantityReceived,
         change_type: 'IN',
-        remarks: 'Stock Received via Barcode Scanner'
+        remarks: 'Stock Received via Barcode Scanner',
+        user_id: this.authService.currentUser()?.id || null
       });
 
     // 6. Increment Inventory Stock Quantity

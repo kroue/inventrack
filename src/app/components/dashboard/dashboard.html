@@ -168,9 +168,11 @@
             <span class="text-xs font-medium text-gray-600">{{ stat.label }}</span>
             <span class="text-xs font-semibold text-gray-800">{{ stat.value }}</span>
           </div>
-          <div class="h-1.5 bg-gray-200 rounded-full overflow-hidden">
-            <div class="h-full rounded-full bar-inner" [class]="stat.color" [style.width]="stat.percent"></div>
-          </div>
+          @if (!stat.hideBar) {
+            <div class="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <div class="h-full rounded-full bar-inner" [class]="stat.color" [style.width]="stat.percent"></div>
+            </div>
+          }
         </div>
         }
       </div>
@@ -190,13 +192,21 @@
         <div>Total</div>
         <div>Date</div>
       </div>
-      @for (row of salesHistory(); track row.cashier; let i = $index) {
+      @for (row of salesHistory(); track row.id; let i = $index) {
       <div
         class="grid grid-cols-4 items-center py-3 px-2 text-sm text-gray-700 border-b border-gray-100 table-row-hover rounded-xl animate-fade-in-up"
         [ngStyle]="{'animation-delay': (400 + i * 60) + 'ms'}">
-        <div class="font-medium">{{ row.cashier }}</div>
-        <div>{{ row.products }}</div>
-        <div class="font-semibold text-gray-900">₱{{ row.total }}</div>
+        <div class="font-medium" [ngClass]="row.isReturn ? 'text-red-600' : ''">
+          @if (row.isReturn) {
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 mr-2">Return</span>
+          } @else {
+            {{ row.cashier }}
+          }
+        </div>
+        <div [ngClass]="{'line-through text-gray-400': row.isReturn}">{{ row.products }}</div>
+        <div class="font-semibold" [ngClass]="row.isReturn ? 'text-red-600' : 'text-gray-900'">
+          @if (row.isReturn) { -₱{{ row.total.replace('-', '') }} } @else { ₱{{ row.total }} }
+        </div>
         <div class="text-gray-400 text-xs">{{ row.date }}</div>
       </div>
       }

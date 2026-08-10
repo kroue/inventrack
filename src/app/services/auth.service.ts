@@ -58,7 +58,11 @@ export class AuthService {
     }
 
     if (data.user) {
-      await this._loadUserProfile(data.user);
+      const loadError = await this._loadUserProfile(data.user);
+      if (loadError) {
+        await this.supabase.auth.signOut();
+        return { error: loadError };
+      }
     }
 
     return { error: null };
@@ -80,7 +84,10 @@ export class AuthService {
       const { data: { session } } = await this.supabase.auth.getSession();
 
       if (session?.user) {
-        await this._loadUserProfile(session.user);
+        const err = await this._loadUserProfile(session.user);
+        if (err) {
+          await this.signOut();
+        }
       }
     } catch {
       // Silent fail — user will be redirected to login by the route guard
@@ -91,7 +98,10 @@ export class AuthService {
     // Listen for auth state changes (sign in / sign out / token refresh)
     this.supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
-        await this._loadUserProfile(session.user);
+        const err = await this._loadUserProfile(session.user);
+        if (err) {
+          await this.signOut();
+        }
       } else if (event === 'SIGNED_OUT') {
         this._currentUser.set(null);
         this.router.navigate(['/login']);
@@ -107,11 +117,12 @@ export class AuthService {
    *   role        text  ('Admin' | 'Cashier')
    *   full_name   text
    */
-  private async _loadUserProfile(user: User): Promise<void> {
+  private async _loadUserProfile(user: User): Promise<string | null> {
     interface ProfileRecord {
       role?: string;
       full_name?: string;
       user_id?: string;
+      is_active?: boolean;
     }
 
     // 1. Try fetching by user_id using maybeSingle() to avoid 406 errors when missing
@@ -119,7 +130,7 @@ export class AuthService {
 
     const { data: profileById } = await this.supabase
       .from('users')
-      .select('role, full_name, user_id')
+      .select('role, full_name, user_id, is_active')
       .eq('user_id', user.id)
       .maybeSingle();
 
@@ -131,7 +142,7 @@ export class AuthService {
     if (!profile && user.email) {
       const { data: profileByEmail } = await this.supabase
         .from('users')
-        .select('role, full_name, user_id')
+        .select('role, full_name, user_id, is_active')
         .eq('email', user.email)
         .maybeSingle();
 
@@ -156,9 +167,10 @@ export class AuthService {
           user_id: user.id,
           email: user.email,
           full_name: fullName,
-          role: defaultRole
+          role: defaultRole,
+          is_active: true
         })
-        .select('role, full_name')
+        .select('role, full_name, is_active')
         .maybeSingle();
 
       if (!insertError && newProfile) {
@@ -167,9 +179,14 @@ export class AuthService {
         // Fallback in-memory profile if insert is constrained
         profile = {
           role: defaultRole,
-          full_name: fullName
+          full_name: fullName,
+          is_active: true
         };
       }
+    }
+
+    if (profile && profile.is_active === false) {
+      return 'This account has been deactivated. Please contact an admin.';
     }
 
     const role = (profile?.role as UserRole) ?? 'Cashier';
@@ -181,5 +198,7 @@ export class AuthService {
       role:        role,
       displayName: displayName,
     });
+    
+    return null;
   }
 }

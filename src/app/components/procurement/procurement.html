@@ -209,19 +209,38 @@
     <div class="flex flex-col md:flex-row w-full gap-6">
       <div class="flex-1 text-sm">
         <div class="grid grid-cols-3 font-semibold text-xs text-gray-400 uppercase tracking-wide mb-3 px-2 pb-2 border-b border-gray-200">
-          <div>Product</div>
+          <div>Supplier</div>
           <div class="text-center">Qty Ordered</div>
           <div class="text-center">Qty Received</div>
         </div>
 
         @for (delivery of deliveries(); track delivery.delivery_id; let i = $index) {
-          <div (click)="selectDelivery(i)" 
-               class="grid grid-cols-3 items-center py-3 px-2 border-b border-gray-100 cursor-pointer rounded-xl transition-all animate-fade-in-up"
-               [ngClass]="selectedDeliveryIndex() === i ? 'bg-white shadow-sm border-gray-200' : 'table-row-hover'"
+          <div class="flex flex-col border-b border-gray-100 transition-all animate-fade-in-up"
                [ngStyle]="{'animation-delay': (250 + i * 60) + 'ms'}">
-            <div class="font-medium text-gray-800 text-xs truncate" [title]="delivery.product">{{ delivery.product }}</div>
-            <div class="text-center text-xs text-gray-500">{{ delivery.ordered }}</div>
-            <div class="text-center text-xs font-semibold text-green-600">{{ delivery.received }}</div>
+            
+            <div (click)="selectDelivery(i)" 
+                 class="grid grid-cols-3 items-center py-3 px-2 cursor-pointer rounded-xl transition-all"
+                 [ngClass]="selectedDeliveryIndex() === i ? 'bg-white shadow-sm border-gray-200' : 'table-row-hover'">
+              <div class="flex items-center space-x-2">
+                <svg [class.rotate-90]="selectedDeliveryIndex() === i" class="w-3.5 h-3.5 text-gray-400 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                <div class="font-medium text-gray-800 text-xs truncate" [title]="delivery.supplier">{{ delivery.supplier }}</div>
+              </div>
+              <div class="text-center text-xs text-gray-500">{{ delivery.ordered }}</div>
+              <div class="text-center text-xs font-semibold text-green-600">{{ delivery.received }}</div>
+            </div>
+
+            @if (selectedDeliveryIndex() === i) {
+              <div class="pl-7 pr-2 pb-3 pt-1 space-y-2 animate-fade-in bg-gray-50/50 rounded-b-xl border-t border-gray-50">
+                <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Items Received</div>
+                @for (item of delivery.delivery_items; track item.delivery_item_id) {
+                  <div class="grid grid-cols-3 items-center text-xs">
+                    <div class="text-gray-600 truncate">{{ item.products?.product_name }}</div>
+                    <div class="text-center text-gray-400">{{ item.quantity_ordered }}</div>
+                    <div class="text-center text-green-600">{{ item.quantity_received }}</div>
+                  </div>
+                }
+              </div>
+            }
           </div>
         }
 
@@ -243,7 +262,7 @@
         </div>
         <div>
           <span class="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">Received By</span>
-          <span class="text-gray-800 font-medium">{{ deliveries()[selectedDeliveryIndex()] ? 'Admin User' : '—' }}</span>
+          <span class="text-gray-800 font-medium">{{ deliveries()[selectedDeliveryIndex()]?.received_by_name || '—' }}</span>
         </div>
         <div>
           <span class="block text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">Supplier</span>
@@ -401,14 +420,18 @@
           <!-- Step 3: Manual Input Fields for FEFO -->
           <div class="grid grid-cols-2 gap-4 mb-6">
             <div>
-              <label class="block text-[10px] uppercase tracking-wider font-semibold text-gray-500 mb-1">Quantity Received <span class="text-red-500">*</span></label>
+              <label class="block text-[10px] uppercase tracking-wider font-semibold text-gray-500 mb-1"
+                [ngClass]="{'text-red-500': barcodeReceiveForm.get('quantity_received')?.invalid && barcodeReceiveForm.get('quantity_received')?.touched}">Quantity Received <span class="text-red-500">*</span></label>
               <input type="number" formControlName="quantity_received" min="1" placeholder="0"
-                class="w-full bg-white border border-gray-300 rounded-xl px-3 py-2 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+                class="w-full bg-white border rounded-xl px-3 py-2 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                [ngClass]="(barcodeReceiveForm.get('quantity_received')?.invalid && barcodeReceiveForm.get('quantity_received')?.touched) ? 'border-red-400 bg-red-50' : 'border-gray-300'">
             </div>
             <div>
-              <label class="block text-[10px] uppercase tracking-wider font-semibold text-gray-500 mb-1">Batch Expiration <span class="text-red-500">*</span></label>
+              <label class="block text-[10px] uppercase tracking-wider font-semibold text-gray-500 mb-1"
+                [ngClass]="{'text-red-500': barcodeReceiveForm.get('batch_expiration')?.invalid && barcodeReceiveForm.get('batch_expiration')?.touched}">Batch Expiration <span class="text-red-500">*</span></label>
               <input type="date" formControlName="batch_expiration"
-                class="w-full bg-white border border-gray-300 rounded-xl px-3 py-2 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
+                class="w-full bg-white border rounded-xl px-3 py-2 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                [ngClass]="(barcodeReceiveForm.get('batch_expiration')?.invalid && barcodeReceiveForm.get('batch_expiration')?.touched) ? 'border-red-400 bg-red-50' : 'border-gray-300'">
             </div>
           </div>
 

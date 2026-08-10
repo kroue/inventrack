@@ -166,24 +166,72 @@ export class Dashboard implements OnInit {
       this.pendingRestockCount.set(pendingCount || 0);
 
       // 2. Fetch sales transactions & calculate revenue
-      const { data: salesTotalData } = await client.from('sales').select('*, sale_items(*)');
-      const { data: salesHistData } = await client.from('sales_history').select('*, products(*)');
+      const { data: salesTotalData } = await client.from('sales').select('*, sale_items(*), users(full_name)');
+      const { data: salesHistData } = await client.from('sales_history').select('*, products(*), sales(users(full_name))');
 
       let totalRev = 0;
+      let thisWeekRev = 0;
+      let lastWeekRev = 0;
+      const now = new Date();
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+
       if (salesTotalData && salesTotalData.length > 0) {
         this.rawSalesData = salesTotalData;
-        totalRev = salesTotalData.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
+        salesTotalData.forEach(s => {
+          const amount = Number(s.total_amount || 0);
+          totalRev += amount;
+          const saleDate = new Date(s.sale_date);
+          if (saleDate >= oneWeekAgo) {
+            thisWeekRev += amount;
+          } else if (saleDate >= twoWeeksAgo && saleDate < oneWeekAgo) {
+            lastWeekRev += amount;
+          }
+        });
       } else if (salesHistData && salesHistData.length > 0) {
         // Fallback to sales_history if sales table is not yet populated
         this.rawSalesData = salesHistData;
-        totalRev = salesHistData.reduce((sum, s) => {
+        salesHistData.forEach(s => {
           const price = s.products?.price || 100;
-          return sum + (s.quantity_sold * price);
-        }, 0);
+          const amount = (s.quantity_sold * price);
+          totalRev += amount;
+          const saleDate = new Date(s.date);
+          if (saleDate >= oneWeekAgo) {
+            thisWeekRev += amount;
+          } else if (saleDate >= twoWeeksAgo && saleDate < oneWeekAgo) {
+            lastWeekRev += amount;
+          }
+        });
       }
       
-      this.totalRevenue.set(totalRev);
-      this.revenueTrend.set(12.5); // Default positive growth trend demonstration
+      // 3. Fetch returns to subtract from revenue
+      const { data: returnsData } = await client
+        .from('stock_log')
+        .select('*, products(price)')
+        .eq('change_type', 'Customer Return');
+
+      if (returnsData) {
+        returnsData.forEach(r => {
+          const price = r.products?.price || 0;
+          const refundAmount = r.quantity * price;
+          totalRev -= refundAmount;
+          const returnDate = new Date(r.log_date);
+          if (returnDate >= oneWeekAgo) {
+            thisWeekRev -= refundAmount;
+          } else if (returnDate >= twoWeeksAgo && returnDate < oneWeekAgo) {
+            lastWeekRev -= refundAmount;
+          }
+        });
+      }
+      
+      this.totalRevenue.set(Math.max(0, totalRev));
+      let trend = 0;
+      if (lastWeekRev > 0) {
+        trend = ((thisWeekRev - lastWeekRev) / lastWeekRev) * 100;
+      } else if (thisWeekRev > 0) {
+        trend = 100;
+      }
+      this.revenueTrend.set(Number(trend.toFixed(1)));
 
       this.updateChart();
 
@@ -197,23 +245,49 @@ export class Dashboard implements OnInit {
         .from('suppliers')
         .select('*', { count: 'exact', head: true });
 
+      const healthyPercent = total > 0 ? (inCount / total) * 100 : 0;
+      const warningPercent = total > 0 ? (lowCount / total) * 100 : 0;
+      const criticalPercent = total > 0 ? (outCount / total) * 100 : 0;
+      
       this.quickStats.set([
-        { label: 'Total Products',    value: total || 0,                 percent: '100%', color: 'bg-blue-500' },
-        { label: 'Active Alerts',     value: lowCount || alertsCount || 0, percent: '100%', color: 'bg-red-500'  },
-        { label: 'Active Suppliers',  value: suppliersCount || 0,        percent: '100%',  color: 'bg-green-500'}, 
-        { label: 'PO Completion',     value: '85%',                      percent: '85%',   color: 'bg-purple-500'},
+        { label: 'Healthy Stock Rate', value: `${Math.round(healthyPercent)}%`, percent: `${healthyPercent}%`, color: 'bg-green-500' },
+        { label: 'Low Stock Alerts',   value: lowCount || 0,                    percent: `${warningPercent}%`, color: 'bg-yellow-500'  },
+        { label: 'Out of Stock Items', value: outCount || 0,                    percent: `${criticalPercent}%`, color: 'bg-red-500'}, 
+        { label: 'Total Products',     value: total || 0,                       percent: `0%`, hideBar: true}, // We hide the bar for absolute totals
       ]);
 
+      let combinedHistory: any[] = [];
+      
       if (salesHistData && salesHistData.length > 0) {
-        this.salesHistory.set(salesHistData.slice(0, 5).map(s => ({
-          cashier: 'POS Cashier', 
+        combinedHistory = combinedHistory.concat(salesHistData.map(s => ({
+          cashier: s.sales?.users?.full_name || 'Unknown', 
           products: `${s.products?.product_name || 'Item'} (x${s.quantity_sold})`,
-          total: (s.quantity_sold * (s.products?.price || 100)).toFixed(2),
-          date: new Date(s.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+          total: (s.quantity_sold * (s.products?.price || 0)).toFixed(2),
+          dateObj: new Date(s.date),
+          isReturn: false
         })));
-      } else {
-        this.salesHistory.set([]);
       }
+      
+      if (returnsData && returnsData.length > 0) {
+        combinedHistory = combinedHistory.concat(returnsData.map(r => ({
+          cashier: 'Customer Return',
+          products: `${r.products?.product_name || 'Item'} (x${r.quantity})`,
+          total: `-${(r.quantity * (r.products?.price || 0)).toFixed(2)}`,
+          dateObj: new Date(r.log_date),
+          isReturn: true
+        })));
+      }
+
+      combinedHistory.sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
+
+      this.salesHistory.set(combinedHistory.slice(0, 5).map((item, index) => ({
+        id: `hist_${index}`,
+        cashier: item.cashier,
+        products: item.products,
+        total: item.total,
+        date: item.dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        isReturn: item.isReturn
+      })));
 
     } catch (err: any) {
       console.error('Failed to load dashboard data', err);

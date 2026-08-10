@@ -1,11 +1,13 @@
 import { Injectable, inject } from '@angular/core';
 import { SupabaseService } from './supabase.service';
+import { AuthService } from './auth.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class InventoryLogicService {
   private supabaseService = inject(SupabaseService);
+  private authService = inject(AuthService);
 
   constructor() { }
 
@@ -93,6 +95,35 @@ export class InventoryLogicService {
   }
 
   /**
+   * Fetch all suppliers from Supabase
+   */
+  async getSuppliers(): Promise<import('../models/itrack.models').Suppliers[]> {
+    const supabase = this.supabaseService.client;
+    const { data, error } = await supabase
+      .from('suppliers')
+      .select('*')
+      .order('supplier_name', { ascending: true });
+      
+    if (error) this.supabaseService.handleError(error);
+    return data as import('../models/itrack.models').Suppliers[];
+  }
+
+  /**
+   * Create a new supplier
+   */
+  async createSupplier(supplier: Partial<import('../models/itrack.models').Suppliers>): Promise<import('../models/itrack.models').Suppliers> {
+    const supabase = this.supabaseService.client;
+    const { data, error } = await supabase
+      .from('suppliers')
+      .insert(supplier)
+      .select()
+      .single();
+      
+    if (error) throw error;
+    return data as import('../models/itrack.models').Suppliers;
+  }
+
+  /**
    * Create a new product and initialize its inventory row.
    */
   async createProduct(product: Partial<import('../models/itrack.models').Product>, initialStock: number = 0, safetyStock: number = 20, leadTime: number = 2): Promise<void> {
@@ -145,7 +176,8 @@ export class InventoryLogicService {
             batch_id: batch?.batch_id,
             quantity: initialStock,
             change_type: 'IN',
-            remarks: 'Initial Product Stock Setup'
+            remarks: 'Initial Product Stock Setup',
+            user_id: this.authService.currentUser()?.id || null
           });
       }
     }
@@ -156,12 +188,49 @@ export class InventoryLogicService {
    */
   async updateProduct(productId: string, updates: Partial<import('../models/itrack.models').Product>): Promise<void> {
     const supabase = this.supabaseService.client;
+    
+    // Fetch old product for price history
+    const { data: oldProd } = await supabase.from('products').select('*').eq('product_id', productId).single();
+    
     const { error } = await supabase
       .from('products')
       .update(updates)
       .eq('product_id', productId);
       
     if (error) throw error;
+
+    // Log price history if changed
+    if (oldProd && (updates.price !== undefined || updates.cost_price !== undefined)) {
+      const oldPrice = Number(oldProd.price);
+      const newPrice = updates.price !== undefined ? Number(updates.price) : oldPrice;
+      const oldCost = Number(oldProd.cost_price);
+      const newCost = updates.cost_price !== undefined ? Number(updates.cost_price) : oldCost;
+
+      if (oldPrice !== newPrice || oldCost !== newCost) {
+        await supabase.from('product_price_history').insert({
+          product_id: productId,
+          old_store_price: oldPrice,
+          new_store_price: newPrice,
+          old_supplier_price: oldCost,
+          new_supplier_price: newCost,
+          changed_by: this.authService.currentUser()?.id || null
+        });
+      }
+    }
+  }
+
+  /**
+   * Fetch price history for a specific product
+   */
+  async getProductPriceHistory(productId: string): Promise<any[]> {
+    const { data, error } = await this.supabaseService.client
+      .from('product_price_history')
+      .select('*, users(full_name)')
+      .eq('product_id', productId)
+      .order('changed_at', { ascending: false });
+      
+    if (error) this.supabaseService.handleError(error);
+    return data || [];
   }
 
   /**
@@ -188,6 +257,52 @@ export class InventoryLogicService {
       .eq('product_id', productId);
       
     if (error) throw error;
+  }
+
+  /**
+   * Process a return (Customer Return or Return to Supplier)
+   */
+  async processReturn(productId: string, returnType: 'Customer Return' | 'Return to Supplier', quantity: number, remarks: string) {
+    const supabase = this.supabaseService.client;
+    
+    // 1. Get current inventory
+    const { data: invData, error: invError } = await supabase
+      .from('inventory')
+      .select('stock_quantity')
+      .eq('product_id', productId)
+      .single();
+      
+    if (invError) throw invError;
+    
+    const isAdding = returnType === 'Customer Return';
+    const newStock = isAdding 
+      ? invData.stock_quantity + quantity 
+      : invData.stock_quantity - quantity;
+      
+    if (!isAdding && newStock < 0) {
+      throw new Error('Not enough stock to return to supplier.');
+    }
+
+    // 2. Update inventory
+    const { error: updateError } = await supabase
+      .from('inventory')
+      .update({ stock_quantity: newStock })
+      .eq('product_id', productId);
+      
+    if (updateError) throw updateError;
+    
+    // 3. Create stock log
+    const { error: logError } = await supabase
+      .from('stock_log')
+      .insert({
+        product_id: productId,
+        quantity: quantity,
+        change_type: returnType,
+        remarks: remarks || `Logged ${returnType}`,
+        user_id: this.authService.currentUser()?.id || null
+      });
+      
+    if (logError) throw logError;
   }
 
   /**
