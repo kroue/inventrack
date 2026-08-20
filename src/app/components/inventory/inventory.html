@@ -55,8 +55,8 @@
 
           <!-- Image Placeholder -->
           <div class="bg-white rounded-2xl h-[115px] w-full shadow-sm mb-3 flex items-center justify-center overflow-hidden">
-            @if (product.image_url) {
-              <img [src]="product.image_url" class="w-full h-full object-contain p-2 mix-blend-multiply hover:scale-110 transition-transform duration-300" [alt]="product.product_name" />
+            @if (product.image_url && !product.image_error) {
+              <img [src]="product.image_url" (error)="product.image_error = true" class="w-full h-full object-contain p-2 mix-blend-multiply hover:scale-110 transition-transform duration-300" [alt]="product.product_name" />
             } @else {
               <svg class="w-8 h-8 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
@@ -135,8 +135,8 @@
           <div class="grid grid-cols-6 items-center px-6 py-4 hover:bg-gray-50 transition-colors group animate-fade-in-up" [ngStyle]="{'animation-delay': (i * 30) + 'ms'}">
             <div class="col-span-2 flex items-center pr-4">
               <div class="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center mr-4 flex-shrink-0 overflow-hidden">
-                @if (product.image_url) {
-                  <img [src]="product.image_url" class="w-full h-full object-cover" [alt]="product.product_name" />
+                @if (product.image_url && !product.image_error) {
+                  <img [src]="product.image_url" (error)="product.image_error = true" class="w-full h-full object-cover" [alt]="product.product_name" />
                 } @else {
                   <svg class="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
@@ -185,171 +185,178 @@
 
 <!-- Add/Edit Product Modal -->
 @if (isModalOpen()) {
-<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-fade-in">
-  <div class="bg-white rounded-3xl shadow-xl w-full max-w-xl overflow-hidden animate-scale-in">
-    <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-      <h2 class="text-lg font-semibold text-gray-900 flex items-center space-x-3">
-        <span>{{ modalMode() }} Product</span>
-        @if (modalMode() === 'Edit' && currentProduct().product_id) {
-          <button type="button" (click)="openPriceHistoryModal(currentProduct().product_id!)" class="text-[10px] bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded-lg transition-colors font-medium">
-            View Price History
-          </button>
-        }
-      </h2>
-      <button type="button" (click)="closeModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-      </button>
-    </div>
-    
-    <div class="p-6">
-      <!-- ADD/EDIT MODE -->
-      <form (ngSubmit)="saveProduct()" (keydown.enter)="$event.preventDefault()" #productForm="ngForm" class="space-y-4">
-        
-        @if (errorMessage()) {
-          <div class="bg-red-50 text-red-600 p-3 rounded-xl text-sm border border-red-100">
-            {{ errorMessage() }}
-          </div>
-        }
-
-        <div class="grid grid-cols-2 gap-4">
-          @if (currentProduct().image_url) {
-            <div class="col-span-2 flex justify-center mb-2 animate-fade-in-up">
-              <div class="w-24 h-24 rounded-2xl bg-white overflow-hidden border border-gray-100 shadow-sm relative group">
-                <img [src]="currentProduct().image_url" class="w-full h-full object-contain p-2 mix-blend-multiply hover:scale-110 transition-transform duration-300" [alt]="currentProduct().product_name" />
-                <button type="button" (click)="currentProduct().image_url = undefined" class="absolute top-1 right-1 p-1 bg-white/80 hover:bg-white rounded-lg text-gray-500 opacity-0 group-hover:opacity-100 transition-all shadow-sm">
-                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-              </div>
+  <div class="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6 animate-fade-in">
+    <div class="bg-white rounded-[24px] shadow-2xl w-full max-w-xl max-h-full flex flex-col animate-scale-in overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 flex-shrink-0">
+        <h2 class="text-lg font-semibold text-gray-900 flex items-center space-x-3">
+          <span>{{ modalMode() }} Product</span>
+          @if (modalMode() === 'Edit' && currentProduct().product_id) {
+            <button type="button" (click)="openPriceHistoryModal(currentProduct().product_id!)" class="text-[10px] bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded-lg transition-colors font-medium">
+              View Price History
+            </button>
+          }
+        </h2>
+        <button type="button" (click)="closeModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      
+      <!-- Form Content -->
+      <form (ngSubmit)="saveProduct()" #productForm="ngForm" class="flex flex-col flex-1 overflow-hidden">
+        <div class="px-6 py-6 overflow-y-auto custom-scrollbar flex-1">
+          @if (errorMessage()) {
+            <div class="bg-red-50 text-red-600 p-3 rounded-xl text-sm border border-red-100 mb-4">
+              {{ errorMessage() }}
             </div>
           }
-          <div class="col-span-2">
-            <label class="block text-xs font-medium text-gray-700 mb-1">Product Name</label>
-            <input type="text" [(ngModel)]="currentProduct().product_name" name="name" required
-              class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
-          </div>
-          
-          <div class="relative">
-            <div class="flex items-center justify-between mb-1">
-              <label class="block text-xs font-medium text-gray-700">Category</label>
-              <label class="flex items-center space-x-1.5 text-[10px] font-medium text-gray-500 cursor-pointer group">
-                <input type="checkbox" [checked]="isCreatingCategory()" (change)="isCreatingCategory.set(!isCreatingCategory()); currentProduct().category_name = ''" class="rounded border-gray-300 w-3 h-3 text-gray-900 focus:ring-gray-900 transition-colors">
-                <span class="group-hover:text-gray-900 transition-colors">New</span>
-              </label>
+
+          <div class="grid grid-cols-2 gap-4">
+            @if (currentProduct().image_url) {
+              <div class="col-span-2 flex justify-center mb-2 animate-fade-in-up">
+                <div class="w-24 h-24 rounded-2xl bg-white overflow-hidden border border-gray-100 shadow-sm relative group">
+                  @if (!currentProduct().image_error) {
+                    <img [src]="currentProduct().image_url" (error)="currentProduct().image_error = true" class="w-full h-full object-contain p-2 mix-blend-multiply hover:scale-110 transition-transform duration-300" [alt]="currentProduct().product_name" />
+                  } @else {
+                    <div class="w-full h-full flex flex-col items-center justify-center text-red-400 bg-red-50/50">
+                      <svg class="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                      <span class="text-[9px] font-bold uppercase tracking-wider">Broken</span>
+                    </div>
+                  }
+                  <button type="button" (click)="currentProduct().image_url = undefined; currentProduct().image_error = false" class="absolute top-1 right-1 p-1 bg-white/80 hover:bg-white rounded-lg text-gray-500 opacity-0 group-hover:opacity-100 transition-all shadow-sm">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                  </button>
+                </div>
+              </div>
+            }
+            <div class="col-span-2">
+              <label class="block text-xs font-medium text-gray-700 mb-1">Product Name</label>
+              <input type="text" [(ngModel)]="currentProduct().product_name" name="name" required
+                class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
             </div>
             
-            @if (!isCreatingCategory()) {
-              <select [(ngModel)]="currentProduct().category_name" name="category" required
-                class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
-                <option value="">-- Select Category --</option>
-                @for (cat of categories(); track cat) {
-                  <option [value]="cat">{{ cat }}</option>
-                }
-              </select>
-            } @else {
-              <input type="text" [(ngModel)]="currentProduct().category_name" name="category" required
-                placeholder="Enter new category"
-                class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
-            }
-          </div>
-          
-          <div>
-            <label class="block text-xs font-medium text-gray-700 mb-1">Barcode</label>
             <div class="relative">
-              <input type="text" [(ngModel)]="currentProduct().barcode" name="barcode"
-                placeholder="Scan or Input Manually"
-                class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
-              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-xs font-medium text-gray-700">Category</label>
+                <label class="flex items-center space-x-1.5 text-[10px] font-medium text-gray-500 cursor-pointer group">
+                  <input type="checkbox" [checked]="isCreatingCategory()" (change)="isCreatingCategory.set(!isCreatingCategory()); currentProduct().category_name = ''" class="rounded border-gray-300 w-3 h-3 text-gray-900 focus:ring-gray-900 transition-colors">
+                  <span class="group-hover:text-gray-900 transition-colors">New</span>
+                </label>
               </div>
-            </div>
-          </div>
-          
-          <div class="col-span-2">
-            <label class="block text-xs font-medium text-gray-700 mb-1">Description</label>
-            <textarea [(ngModel)]="currentProduct().description" name="description" rows="2"
-              class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all"></textarea>
-          </div>
-          
-          <div class="col-span-2">
-            <label class="block text-xs font-medium text-gray-700 mb-1">Image URL (Optional)</label>
-            <input type="url" [(ngModel)]="currentProduct().image_url" name="image_url"
-              placeholder="https://example.com/image.jpg"
-              class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
-          </div>
-          
-          <div>
-            <label class="block text-xs font-medium text-gray-700 mb-1">Supplier Price (₱)</label>
-            <input type="number" step="0.01" [(ngModel)]="currentProduct().cost_price" name="cost_price"
-              placeholder="0.00"
-              class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
-          </div>
-
-          <div>
-            <label class="block text-xs font-medium text-gray-700 mb-1">Store Price (₱)</label>
-            <input type="number" step="0.01" [(ngModel)]="currentProduct().price" name="price" required
-              class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
-          </div>
-
-          <div>
-            <label class="block text-xs font-medium text-gray-700 mb-1">Discount Rate (%)</label>
-            <input type="number" step="1" [(ngModel)]="currentProduct().discount_rate_percent" name="discount_rate_percent" min="0" max="100" required
-              class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
-          </div>
-
-          <div>
-            <label class="block text-xs font-medium text-gray-700 mb-1">Near-Expiry Price (₱)</label>
-            <div class="w-full bg-gray-100 border border-gray-200 text-gray-500 font-semibold rounded-xl px-4 py-2.5 text-sm">
-              {{ (currentProduct().price || 0) * (1 - ((currentProduct().discount_rate_percent || 0) / 100)) | number:'1.2-2' }}
-            </div>
-          </div>
-          
-          <div class="col-span-2 pt-2 border-t border-gray-100 mt-2">
-            <div class="flex items-center justify-between mb-3">
-              <label class="block text-sm font-semibold text-gray-800">Supplier Information</label>
-              <label class="flex items-center space-x-2 text-xs font-medium text-gray-600 cursor-pointer group">
-                <input type="checkbox" [checked]="isCreatingSupplier()" (change)="isCreatingSupplier.set(!isCreatingSupplier())" class="rounded border-gray-300 text-gray-900 focus:ring-gray-900 transition-colors">
-                <span class="group-hover:text-gray-900 transition-colors">Create New Supplier</span>
-              </label>
-            </div>
-
-            @if (!isCreatingSupplier()) {
-              <div class="mb-4">
-                <select [(ngModel)]="currentProduct().supplier_id" name="supplier_id" required
+              
+              @if (!isCreatingCategory()) {
+                <select [(ngModel)]="currentProduct().category_name" name="category" required
                   class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
-                  <option value="">-- Select a Supplier --</option>
-                  @for (supplier of suppliers(); track supplier.supplier_id) {
-                    <option [value]="supplier.supplier_id">{{ supplier.supplier_name }}</option>
+                  <option value="">-- Select Category --</option>
+                  @for (cat of categories(); track cat) {
+                    <option [value]="cat">{{ cat }}</option>
                   }
                 </select>
-              </div>
-            } @else {
-              <div class="bg-[#F8F8F8] rounded-xl p-4 border border-gray-100 grid grid-cols-2 gap-4 mb-4">
-                <div class="col-span-2">
-                  <label class="block text-xs font-medium text-gray-700 mb-1">Supplier Name *</label>
-                  <input type="text" [(ngModel)]="newSupplierForm().supplier_name" name="new_supplier_name" required
-                    class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
-                </div>
-                <div>
-                  <label class="block text-xs font-medium text-gray-700 mb-1">Contact Person *</label>
-                  <input type="text" [(ngModel)]="newSupplierForm().contact_person" name="new_supplier_contact" required
-                    class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
-                </div>
-                <div>
-                  <label class="block text-xs font-medium text-gray-700 mb-1">Phone Number *</label>
-                  <input type="text" [(ngModel)]="newSupplierForm().phone" name="new_supplier_phone" required
-                    class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
-                </div>
-                <div class="col-span-2">
-                  <label class="block text-xs font-medium text-gray-700 mb-1">Supplier Address *</label>
-                  <input type="text" [(ngModel)]="newSupplierForm().address" name="new_supplier_address" required
-                    class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+              } @else {
+                <input type="text" [(ngModel)]="currentProduct().category_name" name="category" required
+                  placeholder="Enter new category"
+                  class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+              }
+            </div>
+            
+            <div>
+              <label class="block text-xs font-medium text-gray-700 mb-1">Barcode</label>
+              <div class="relative">
+                <input type="text" [(ngModel)]="currentProduct().barcode" name="barcode"
+                  placeholder="Scan or Input Manually"
+                  class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                 </div>
               </div>
-            }
+            </div>
+            
+            <div class="col-span-2">
+              <label class="block text-xs font-medium text-gray-700 mb-1">Description</label>
+              <textarea [(ngModel)]="currentProduct().description" name="description" rows="2"
+                class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all"></textarea>
+            </div>
+            
+            <div class="col-span-2">
+              <label class="block text-xs font-medium text-gray-700 mb-1">Image URL (Optional)</label>
+              <input type="text" [(ngModel)]="currentProduct().image_url" (input)="currentProduct().image_error = false" name="image_url"
+                placeholder="https://example.com/image.jpg"
+                class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+            </div>
+            
+            <div>
+              <label class="block text-xs font-medium text-gray-700 mb-1">Supplier Price (₱)</label>
+              <input type="number" step="0.01" [(ngModel)]="currentProduct().cost_price" name="cost_price"
+                placeholder="0.00"
+                class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-gray-700 mb-1">Store Price (₱)</label>
+              <input type="number" step="0.01" [(ngModel)]="currentProduct().price" name="price" required
+                class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-gray-700 mb-1">Discount Rate (%)</label>
+              <input type="number" step="1" [(ngModel)]="currentProduct().discount_rate_percent" name="discount_rate_percent" min="0" max="100" required
+                class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-gray-700 mb-1">Near-Expiry Price (₱)</label>
+              <div class="w-full bg-gray-100 border border-gray-200 text-gray-500 font-semibold rounded-xl px-4 py-2.5 text-sm">
+                {{ (currentProduct().price || 0) * (1 - ((currentProduct().discount_rate_percent || 0) / 100)) | number:'1.2-2' }}
+              </div>
+            </div>
+            
+            <div class="col-span-2 pt-2 border-t border-gray-100 mt-2">
+              <div class="flex items-center justify-between mb-3">
+                <label class="block text-sm font-semibold text-gray-800">Supplier Information</label>
+                <label class="flex items-center space-x-2 text-xs font-medium text-gray-600 cursor-pointer group">
+                  <input type="checkbox" [checked]="isCreatingSupplier()" (change)="isCreatingSupplier.set(!isCreatingSupplier())" class="rounded border-gray-300 text-gray-900 focus:ring-gray-900 transition-colors">
+                  <span class="group-hover:text-gray-900 transition-colors">Create New Supplier</span>
+                </label>
+              </div>
+
+              @if (!isCreatingSupplier()) {
+                <div class="mb-4">
+                  <select [(ngModel)]="currentProduct().supplier_id" name="supplier_id" required
+                    class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+                    <option value="">-- Select a Supplier --</option>
+                    @for (supplier of suppliers(); track supplier.supplier_id) {
+                      <option [value]="supplier.supplier_id">{{ supplier.supplier_name }}</option>
+                    }
+                  </select>
+                </div>
+              } @else {
+                <div class="bg-[#F8F8F8] rounded-xl p-4 border border-gray-100 grid grid-cols-2 gap-4 mb-4">
+                  <div class="col-span-2">
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Supplier Name *</label>
+                    <input type="text" [(ngModel)]="newSupplierForm().supplier_name" name="new_supplier_name" required
+                      class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Contact Person *</label>
+                    <input type="text" [(ngModel)]="newSupplierForm().contact_person" name="new_supplier_contact" required
+                      class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+                  </div>
+                  <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Phone Number *</label>
+                    <input type="text" [(ngModel)]="newSupplierForm().phone" name="new_supplier_phone" required
+                      class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+                  </div>
+                  <div class="col-span-2">
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Supplier Address *</label>
+                    <input type="text" [(ngModel)]="newSupplierForm().address" name="new_supplier_address" required
+                      class="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+                  </div>
+                </div>
+              }
+            </div>
           </div>
         </div>
 
-        <div class="mt-6 flex justify-end space-x-3 pt-4 border-t border-gray-100">
+        <div class="p-6 border-t border-gray-100 flex justify-end space-x-3 flex-shrink-0">
           <button type="button" (click)="closeModal()" class="px-5 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
             Cancel
           </button>
@@ -361,7 +368,6 @@
       </form>
     </div>
   </div>
-</div>
 }
 
 <!-- Price History Modal -->
@@ -425,7 +431,7 @@
 
 <!-- Confirmation Modal for Delete -->
 @if (productToDelete) {
-  <div class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center animate-fade-in">
+  <div class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center animate-fade-in p-4 sm:p-6">
     <div class="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in">
       <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
         <h3 class="text-sm font-bold text-gray-800">

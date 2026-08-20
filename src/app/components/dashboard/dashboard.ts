@@ -37,6 +37,10 @@ export class Dashboard implements OnInit {
   quickStats = signal<any[]>([]);
   salesHistory = signal<any[]>([]);
 
+  // Sale History Modal State
+  isSaleModalOpen = signal<boolean>(false);
+  selectedSale = signal<any>(null);
+
   // Predictive Analytics Engine (IPO Model Outputs)
   predictiveAnalytics = signal<any[]>([]);
 
@@ -60,6 +64,16 @@ export class Dashboard implements OnInit {
     this.chartTimeframe.set(tf);
     this.showTimeframeMenu.set(false);
     this.updateChart();
+  }
+
+  openSaleModal(sale: any) {
+    this.selectedSale.set(sale);
+    this.isSaleModalOpen.set(true);
+  }
+
+  closeSaleModal() {
+    this.isSaleModalOpen.set(false);
+    this.selectedSale.set(null);
   }
 
   updateChart() {
@@ -281,7 +295,7 @@ export class Dashboard implements OnInit {
       combinedHistory.sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
 
       this.salesHistory.set(combinedHistory.slice(0, 5).map((item, index) => ({
-        id: `hist_${index}`,
+        id: item.sale_id || `hist_${index}`,
         cashier: item.cashier,
         products: item.products,
         total: item.total,

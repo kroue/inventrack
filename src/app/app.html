@@ -47,6 +47,10 @@
              class="nav-link block w-full text-center bg-white py-2.5 rounded-full shadow-sm text-sm font-medium text-gray-700 animate-fade-in-up delay-400 btn-press">
             Stock Log
           </a>
+          <a routerLink="/sales-history" routerLinkActive="active-link"
+             class="nav-link block w-full text-center bg-white py-2.5 rounded-full shadow-sm text-sm font-medium text-gray-700 animate-fade-in-up delay-[450ms] btn-press">
+            Sales History
+          </a>
         }
 
         <!-- Shared: POS is accessible by both roles -->
@@ -76,7 +80,8 @@
 
     @if (auth.isLoggedIn()) {
       <!-- Topbar -->
-      <header class="h-[68px] bg-[#D3D3D3] flex items-center justify-center flex-shrink-0 border-b border-gray-300 animate-fade-in">
+      <header class="h-[68px] bg-[#D3D3D3] flex items-center justify-center flex-shrink-0 border-b border-gray-300 animate-fade-in gap-3">
+        <img src="logo.png" alt="InvenTrack Logo" class="w-8 h-8 object-contain" />
         <h1 class="text-xl font-semibold text-gray-800 tracking-wide">InvenTrack</h1>
       </header>
     }

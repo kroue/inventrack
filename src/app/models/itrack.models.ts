@@ -21,6 +21,7 @@ export interface Product {
   needs_restock?: boolean;
   supplier_id?: string;
   image_url?: string;
+  image_error?: boolean;
 }
 
 export interface Inventory {

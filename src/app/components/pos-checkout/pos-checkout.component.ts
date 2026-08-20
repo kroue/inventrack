@@ -227,20 +227,13 @@ export class PosCheckoutComponent implements OnInit {
     if (batchesForProduct.length > 0) {
       selectedBatch = batchesForProduct[0];
     } else {
-      // Fallback: If product has inventory stock, synthesize a default batch
       if (currentStock <= 0) {
         this.validationError.set(`Out of stock for ${product.product_name}!`);
         return;
+      } else {
+        this.validationError.set(`No active batch found for ${product.product_name}. Please check inventory records.`);
+        return;
       }
-      selectedBatch = {
-        batch_id: 'default-' + product.product_id,
-        product_id: product.product_id,
-        quantity_received: currentStock,
-        quantity_remaining: currentStock,
-        batch_expiration: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-        risk_score: 'Normal',
-        created_at: new Date().toISOString()
-      };
     }
 
     const expiryDate = new Date(selectedBatch.batch_expiration);
