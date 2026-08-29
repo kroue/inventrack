@@ -4,6 +4,14 @@ import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } 
 import { ProcurementService } from '../../services/procurement.service';
 import { InventoryLogicService } from '../../services/inventory-logic.service';
 
+interface SupplierProfileForm {
+  supplier_name: string;
+  contact_person: string;
+  phone: string;
+  email: string;
+  address: string;
+}
+
 @Component({
   selector: 'app-procurement',
   imports: [CommonModule, FormsModule, ReactiveFormsModule],
@@ -42,6 +50,23 @@ export class Procurement implements OnInit {
   isLoading = signal<boolean>(true);
   isGenerating = signal<boolean>(false);
   isReceiving = signal<boolean>(false);
+
+  // Message shown when the forecasting engine finds nothing below its reorder point
+  restockNotice = signal<string>('');
+
+  // Supplier Management (Use Case Table 21)
+  isSupplierManagerOpen = signal<boolean>(false);
+  isSavingSupplier = signal<boolean>(false);
+  editingSupplierId = signal<string | null>(null);
+  supplierError = signal<string | null>(null);
+  supplierSuccess = signal<string | null>(null);
+  supplierForm = signal<SupplierProfileForm>({
+    supplier_name: '',
+    contact_person: '',
+    phone: '',
+    email: '',
+    address: ''
+  });
 
   // Add Item Modal state
   isAddItemModalOpen = signal<boolean>(false);
@@ -328,6 +353,8 @@ export class Procurement implements OnInit {
         name: r.products?.product_name || 'Unknown Product',
         quantity: r.products?.inventory?.[0]?.stock_quantity ?? 0,
         soq: r.suggested_quantity,
+        velocity: r.daily_velocity ?? 0,
+        rop: r.reorder_point ?? 0,
         checked: true
       }));
 
@@ -335,10 +362,111 @@ export class Procurement implements OnInit {
         ...map,
         [suppId]: mapped
       }));
+
+      if (mapped.length === 0) {
+        this.restockNotice.set('No products for this supplier are at or below their reorder point.');
+      } else {
+        this.restockNotice.set('');
+      }
     } catch (err) {
       console.error('Failed auto generate restock', err);
+      this.restockNotice.set('Failed to generate the restock list.');
     } finally {
       this.isLoading.set(false);
+    }
+  }
+
+  // ─── Supplier Management (Use Case Table 21) ─────────────────────────────
+
+  openSupplierManager() {
+    this.supplierError.set(null);
+    this.supplierSuccess.set(null);
+    this.resetSupplierForm();
+    this.isSupplierManagerOpen.set(true);
+  }
+
+  closeSupplierManager() {
+    this.isSupplierManagerOpen.set(false);
+    this.editingSupplierId.set(null);
+    this.supplierError.set(null);
+    this.supplierSuccess.set(null);
+  }
+
+  private resetSupplierForm() {
+    this.editingSupplierId.set(null);
+    this.supplierForm.set({
+      supplier_name: '',
+      contact_person: '',
+      phone: '',
+      email: '',
+      address: ''
+    });
+  }
+
+  startNewSupplier() {
+    this.resetSupplierForm();
+    this.supplierError.set(null);
+    this.supplierSuccess.set(null);
+  }
+
+  startEditSupplier(supplier: any) {
+    this.editingSupplierId.set(supplier.supplier_id);
+    this.supplierForm.set({
+      supplier_name: supplier.supplier_name || '',
+      contact_person: supplier.contact_person || '',
+      phone: supplier.phone || '',
+      email: supplier.email || '',
+      address: supplier.address || ''
+    });
+    this.supplierError.set(null);
+    this.supplierSuccess.set(null);
+  }
+
+  updateSupplierField<K extends keyof SupplierProfileForm>(field: K, value: SupplierProfileForm[K]) {
+    this.supplierForm.update(form => ({ ...form, [field]: value }));
+    this.supplierError.set(null);
+  }
+
+  async saveSupplierProfile() {
+    const form = this.supplierForm();
+
+    if (!form.supplier_name.trim()) {
+      this.supplierError.set('Supplier name is required.');
+      return;
+    }
+    if (!form.contact_person.trim() || !form.phone.trim() || !form.address.trim()) {
+      this.supplierError.set('Contact person, phone and location are all required.');
+      return;
+    }
+
+    const payload = {
+      supplier_name: form.supplier_name.trim(),
+      contact_person: form.contact_person.trim(),
+      phone: form.phone.trim(),
+      email: form.email.trim() || undefined,
+      address: form.address.trim()
+    };
+
+    try {
+      this.isSavingSupplier.set(true);
+      this.supplierError.set(null);
+
+      const editingId = this.editingSupplierId();
+      if (editingId) {
+        await this.inventoryLogic.updateSupplier(editingId, payload);
+        this.supplierSuccess.set(`Updated ${payload.supplier_name}.`);
+      } else {
+        await this.inventoryLogic.createSupplier(payload);
+        this.supplierSuccess.set(`Added ${payload.supplier_name}.`);
+      }
+
+      this.suppliers.set(await this.procurementService.getSuppliers());
+      this.resetSupplierForm();
+    } catch (err: any) {
+      console.error('Failed to save supplier', err);
+      this.supplierError.set(err.message || 'Failed to save the supplier profile.');
+    } finally {
+      this.isSavingSupplier.set(false);
     }
   }
 
@@ -387,11 +515,19 @@ export class Procurement implements OnInit {
     const po = this.selectedPO();
     if (!po) return;
 
+    // Product and supplier names are admin-entered free text that ends up inside
+    // a document handed to document.write(). Escaping keeps a name containing
+    // markup from executing in the print frame.
+    const escapeHtml = (value: any) =>
+      String(value ?? '').replace(/[&<>"']/g, ch => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] as string
+      ));
+
     let itemsHtml = '';
     po.itemsList.forEach((item: any) => {
       itemsHtml += `
         <tr>
-          <td>${item.name}</td>
+          <td>${escapeHtml(item.name)}</td>
           <td style="text-align: center;">${item.quantity_ordered}</td>
           <td style="text-align: right;">₱ ${item.subtotal.toFixed(2)}</td>
         </tr>
@@ -402,7 +538,7 @@ export class Procurement implements OnInit {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Purchase Order - ${po.supplier}</title>
+          <title>Purchase Order - ${escapeHtml(po.supplier)}</title>
           <style>
             body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; color: #333; }
             .header { text-align: center; margin-bottom: 40px; }
@@ -424,12 +560,12 @@ export class Procurement implements OnInit {
           </div>
           <div class="details">
             <div class="details-col">
-              <p><strong>Supplier:</strong> ${po.supplier}</p>
-              <p><strong>Fulfillment Type:</strong> ${po.type}</p>
+              <p><strong>Supplier:</strong> ${escapeHtml(po.supplier)}</p>
+              <p><strong>Fulfillment Type:</strong> ${escapeHtml(po.type)}</p>
             </div>
             <div class="details-col" style="text-align: right;">
-              <p><strong>Order Date:</strong> ${po.orderDateFormatted}</p>
-              <p><strong>Estimated Arrival:</strong> ${po.estArrivalFormatted}</p>
+              <p><strong>Order Date:</strong> ${escapeHtml(po.orderDateFormatted)}</p>
+              <p><strong>Estimated Arrival:</strong> ${escapeHtml(po.estArrivalFormatted)}</p>
             </div>
           </div>
           <table>

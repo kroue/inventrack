@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { SupabaseService } from './supabase.service';
 import { AuthService } from './auth.service';
+import { InventoryLogicService } from './inventory-logic.service';
 
 @Injectable({
   providedIn: 'root'
@@ -8,6 +9,7 @@ import { AuthService } from './auth.service';
 export class ProcurementService {
   private supabase = inject(SupabaseService);
   private authService = inject(AuthService);
+  private inventoryLogic = inject(InventoryLogicService);
 
   async getSuppliers() {
     const { data, error } = await this.supabase.client
@@ -69,51 +71,127 @@ export class ProcurementService {
     return data || [];
   }
 
+  /**
+   * The Restock List — an automated report compiling every product that has hit its
+   * reorder point, with the Suggested Order Quantity from the forecasting engine.
+   *
+   * Products are selected strictly by the alert condition A_i = 1 if Q_i <= ROP_i,
+   * and the quantity is O_i = (V_i * P) - Q_i where V_i is the EMA-smoothed daily
+   * velocity. Products that are not below their reorder point are not recommended.
+   */
   async autoGenerateRestockRequests(supplierId?: string) {
     // 1. Fetch products with their inventory levels
     let query = this.supabase.client
       .from('products')
       .select('*, inventory(*)');
-      
+
     if (supplierId) {
       query = query.eq('supplier_id', supplierId);
     }
-    
+
     const { data: prods, error } = await query;
-      
+
     if (error || !prods || prods.length === 0) return [];
 
-    // 2. Filter for items that are Low Stock or Out of Stock
-    // Low Stock condition: current stock <= reorder_point OR status is Low Stock/Out of Stock
-    const lowOrOutProds = prods.filter(p => {
+    // 2. Run the forecasting engine per product and keep only those at or below ROP.
+    const generated: any[] = [];
+
+    for (const p of prods) {
       const inv = p.inventory?.[0];
       const stock = inv?.stock_quantity ?? 0;
-      const rop = inv?.reorder_point ?? 20;
-      return stock <= rop || stock <= 0 || p.status === 'Low Stock' || p.status === 'Out of Stock';
-    });
+      const leadTime = inv?.lead_time ?? 1;
+      const safetyStock = inv?.safety_stock ?? 0;
 
-    // Fallback: If no items are low stock, pick items with the lowest stock so user always gets recommendations
-    const targetProds = lowOrOutProds.length > 0 
-      ? lowOrOutProds 
-      : prods.slice().sort((a, b) => (a.inventory?.[0]?.stock_quantity ?? 0) - (b.inventory?.[0]?.stock_quantity ?? 0)).slice(0, 5);
+      // V_i,t — EMA daily sales velocity over the trailing 30 days
+      const dailyVelocity = await this.inventoryLogic.getSalesVelocity(
+        p.product_id,
+        this.inventoryLogic.EMA_WINDOW_DAYS
+      );
 
-    // 3. Map into restock items with calculated SOQ: (target stock 30 days) - current stock
-    return targetProds.map(p => {
-      const stock = p.inventory?.[0]?.stock_quantity ?? 0;
-      const rop = p.inventory?.[0]?.reorder_point ?? 20;
-      const targetStock = Math.max(30, rop * 2);
-      const calculatedSOQ = Math.max(10, targetStock - stock);
+      // ROP_i = (V_i * L_i) + ss_i   and   A_i = 1 if Q_i <= ROP_i
+      const { rop, isLowStockAlert } = this.inventoryLogic.calculateROPAndTrigger(
+        dailyVelocity,
+        leadTime,
+        safetyStock,
+        stock
+      );
 
-      return {
+      if (!isLowStockAlert) continue;
+
+      // O_i = (V_i * P) - Q_i
+      const suggestedQuantity = this.inventoryLogic.calculateSuggestedOrderQuantity(
+        dailyVelocity,
+        this.inventoryLogic.PROJECTION_PERIOD_DAYS,
+        stock
+      );
+
+      if (suggestedQuantity <= 0) continue;
+
+      // 3. Persist the request so the restock list survives a page reload and the
+      //    dashboard's pending count reflects reality.
+      const { data: existing } = await this.supabase.client
+        .from('restock_requests')
+        .select('request_id')
+        .eq('product_id', p.product_id)
+        .eq('status', 'Pending')
+        .maybeSingle();
+
+      let requestId: string;
+
+      if (existing) {
+        requestId = existing.request_id;
+        await this.supabase.client
+          .from('restock_requests')
+          .update({ suggested_quantity: suggestedQuantity })
+          .eq('request_id', requestId);
+      } else {
+        const { data: inserted, error: insertError } = await this.supabase.client
+          .from('restock_requests')
+          .insert({
+            product_id: p.product_id,
+            suggested_quantity: suggestedQuantity,
+            status: 'Pending'
+          })
+          .select('request_id')
+          .single();
+        if (insertError) throw insertError;
+        requestId = inserted.request_id;
+      }
+
+      generated.push({
+        request_id: requestId,
         product_id: p.product_id,
         products: p,
-        suggested_quantity: calculatedSOQ,
-        request_id: p.product_id
-      };
-    });
+        suggested_quantity: suggestedQuantity,
+        daily_velocity: Number(dailyVelocity.toFixed(2)),
+        reorder_point: rop
+      });
+    }
+
+    return generated;
   }
 
   async createRestockRequest(productId: string, suggestedQuantity: number) {
+    // Only one Pending request per product is allowed (migration 00009), so adding a
+    // product that is already queued updates the existing request instead of failing.
+    const { data: existing } = await this.supabase.client
+      .from('restock_requests')
+      .select('request_id')
+      .eq('product_id', productId)
+      .eq('status', 'Pending')
+      .maybeSingle();
+
+    if (existing) {
+      const { data, error } = await this.supabase.client
+        .from('restock_requests')
+        .update({ suggested_quantity: suggestedQuantity })
+        .eq('request_id', existing.request_id)
+        .select('*, products(*, inventory(*))')
+        .single();
+      if (error) throw error;
+      return data;
+    }
+
     const { data, error } = await this.supabase.client
       .from('restock_requests')
       .insert({

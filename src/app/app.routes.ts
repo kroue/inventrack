@@ -17,8 +17,12 @@ export const routes: Routes = [
   // Redirect root based on auth state (guard handles the actual check)
   { path: '', redirectTo: 'login', pathMatch: 'full' },
 
-  // Admin + Cashier shared
+  // Admin + Cashier shared.
+  // Offline Sync is shared because Use Case Table 31 names the Cashier as the
+  // actor who records sales on the Excel form and uploads them once the system
+  // is available again.
   { path: 'pos', component: PosCheckoutComponent, canActivate: [authGuard] },
+  { path: 'offline-sync', component: OfflineSync, canActivate: [authGuard] },
 
   // Admin-only
   { path: 'dashboard',   component: Dashboard,            canActivate: [authGuard], data: { role: 'Admin' } },
@@ -27,7 +31,6 @@ export const routes: Routes = [
   { path: 'procurement', component: Procurement,          canActivate: [authGuard], data: { role: 'Admin' } },
   { path: 'stock-log',   component: StockLog,             canActivate: [authGuard], data: { role: 'Admin' } },
   { path: 'sales-history', component: SalesHistory,       canActivate: [authGuard], data: { role: 'Admin' } },
-  { path: 'offline-sync',component: OfflineSync,          canActivate: [authGuard], data: { role: 'Admin' } },
 
   // Catch-all
   { path: '**', redirectTo: 'login' },

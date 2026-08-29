@@ -18,7 +18,7 @@
     
     <button (click)="openAddModal()" class="ml-4 bg-gray-900 text-white text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-gray-800 transition-colors shadow-sm flex items-center">
       <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-      Add Cashier
+      Add Staff
     </button>
   </div>
 
@@ -58,6 +58,11 @@
                 [ngClass]="user.status === 'Active' ? 'bg-green-500' : 'bg-gray-300'"></div>
               <span [ngClass]="user.status === 'Active' ? 'text-green-700' : 'text-gray-400'">{{ user.status }}</span>
             </div>
+            <button (click)="openEditModal(user)" class="ml-2 p-1 rounded-full hover:bg-gray-100 transition-colors group btn-press" title="Edit Administrator">
+              <svg class="w-4 h-4 text-gray-400 group-hover:text-gray-700 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+              </svg>
+            </button>
           </div>
         </div>
       }
@@ -97,7 +102,12 @@
                 [ngClass]="user.status === 'Active' ? 'bg-green-500' : 'bg-gray-300'"></div>
               <span [ngClass]="user.status === 'Active' ? 'text-green-700' : 'text-gray-400'">{{ user.status }}</span>
             </div>
-            <button (click)="confirmToggleStatus(user)" class="ml-2 p-1 rounded-full hover:bg-gray-100 transition-colors group btn-press" [title]="user.status === 'Active' ? 'Deactivate Cashier' : 'Activate Cashier'">
+            <button (click)="openEditModal(user)" class="ml-2 p-1 rounded-full hover:bg-gray-100 transition-colors group btn-press" title="Edit Cashier">
+              <svg class="w-4 h-4 text-gray-400 group-hover:text-gray-700 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path>
+              </svg>
+            </button>
+            <button (click)="confirmToggleStatus(user)" class="p-1 rounded-full hover:bg-gray-100 transition-colors group btn-press" [title]="user.status === 'Active' ? 'Deactivate Cashier' : 'Activate Cashier'">
               <svg class="w-4 h-4 text-gray-400 group-hover:text-gray-700 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
               </svg>
@@ -114,7 +124,7 @@
   <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-fade-in">
     <div class="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in">
       <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-        <h2 class="text-lg font-semibold text-gray-900">Add New Cashier</h2>
+        <h2 class="text-lg font-semibold text-gray-900">Add Staff Account</h2>
         <button (click)="closeAddModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
         </button>
@@ -130,22 +140,32 @@
         <div class="space-y-4">
           <div>
             <label class="block text-xs font-medium text-gray-700 mb-1">Full Name</label>
-            <input type="text" [(ngModel)]="newUserForm().full_name" placeholder="Juan Dela Cruz" class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+            <input type="text" [ngModel]="newUserForm().full_name" (ngModelChange)="updateNewField('full_name', $event)" placeholder="Juan Dela Cruz" class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
           </div>
   
           <div>
             <label class="block text-xs font-medium text-gray-700 mb-1">Email</label>
-            <input type="email" [(ngModel)]="newUserForm().email" placeholder="juan@inventrack.com" class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
-          </div>
-  
-          <div>
-            <label class="block text-xs font-medium text-gray-700 mb-1">Password</label>
-            <input type="password" [(ngModel)]="newUserForm().password" placeholder="••••••••" class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+            <input type="email" [ngModel]="newUserForm().email" (ngModelChange)="updateNewField('email', $event)" placeholder="juan@inventrack.com" class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
           </div>
   
           <div>
             <label class="block text-xs font-medium text-gray-700 mb-1">Role</label>
-            <input type="text" disabled value="Cashier" class="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-2.5 text-sm opacity-70">
+            <select [ngModel]="newUserForm().role" (ngModelChange)="updateNewField('role', $event)"
+              class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+              <option value="Cashier">Cashier</option>
+              <option value="Admin">Admin</option>
+            </select>
+          </div>
+
+          <div class="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+            <p class="text-[11px] text-blue-900 leading-relaxed">
+              <span class="font-semibold">Create the login first.</span>
+              Sign-in is handled by Supabase Auth, so add this email under
+              <span class="font-medium">Authentication &rarr; Users</span> in the Supabase
+              dashboard and set the password there, then add them here. InvenTrack
+              never stores passwords, and it will refuse to create a staff record
+              that has no matching login.
+            </p>
           </div>
         </div>
   
@@ -155,7 +175,7 @@
           </button>
           <button type="button" (click)="saveUser()" [disabled]="isSaving()"
             class="px-6 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50 shadow-sm flex items-center">
-            {{ isSaving() ? 'Saving...' : 'Add Cashier' }}
+            {{ isSaving() ? 'Saving...' : 'Add Staff' }}
           </button>
         </div>
       </div>
@@ -178,7 +198,7 @@
 
       <div class="p-6">
         <p class="text-sm text-gray-700 font-medium mb-6">
-          Are you sure you want to {{ userToConfirm.status === 'Active' ? 'deactivate' : 'activate' }} <span class="font-bold text-gray-900">{{ userToConfirm.full_name }}</span>?
+          Are you sure you want to {{ userToConfirm.status === 'Active' ? 'deactivate' : 'activate' }} <span class="font-bold text-gray-900">{{ userToConfirm.name }}</span>?
         </p>
         
         <div class="flex justify-end space-x-3 pt-2">
@@ -188,6 +208,59 @@
           <button type="button" (click)="executeToggleStatus()"
             class="px-5 py-2.5 text-sm font-bold bg-blue-600 text-white rounded-xl hover:bg-blue-700 shadow-sm transition-all btn-press">
             Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Edit User Modal (Use Case Table 18) -->
+@if (isEditModalOpen()) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-fade-in">
+    <div class="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in">
+      <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+        <h2 class="text-lg font-semibold text-gray-900">Edit User</h2>
+        <button (click)="closeEditModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <div class="p-6">
+        @if (editError()) {
+          <div class="bg-red-50 text-red-600 p-3 rounded-xl text-sm border border-red-100 mb-4">
+            {{ editError() }}
+          </div>
+        }
+
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Full Name</label>
+            <input type="text"
+              [ngModel]="editUserForm().full_name" (ngModelChange)="updateEditField('full_name', $event)"
+              class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-gray-700 mb-1">Email</label>
+            <input type="email"
+              [ngModel]="editUserForm().email" (ngModelChange)="updateEditField('email', $event)"
+              class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+          </div>
+
+          <p class="text-[11px] text-gray-400 leading-relaxed">
+            Passwords are managed by Supabase Auth and cannot be changed here. Use
+            Activate / Deactivate to control whether a user can sign in.
+          </p>
+        </div>
+
+        <div class="mt-6 flex justify-end space-x-3 pt-4 border-t border-gray-100">
+          <button type="button" (click)="closeEditModal()" class="px-5 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
+            Cancel
+          </button>
+          <button type="button" (click)="saveEditedUser()" [disabled]="isSaving()"
+            class="px-6 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50 shadow-sm">
+            {{ isSaving() ? 'Saving...' : 'Save Changes' }}
           </button>
         </div>
       </div>

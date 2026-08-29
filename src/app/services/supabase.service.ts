@@ -50,4 +50,35 @@ export class SupabaseService {
     }
     return data;
   }
+
+  /**
+   * Helper to commit an uploaded offline (Excel Log) sales sheet via RPC.
+   * The whole sheet is imported inside one database transaction, so a bad row
+   * rejects the entire file rather than leaving a half-recorded day of sales.
+   */
+  async importOfflineSales(rows: OfflineSaleRow[]): Promise<OfflineImportResult> {
+    const { data, error } = await this.client.rpc('import_offline_sales', {
+      p_rows: rows
+    });
+
+    if (error) {
+      throw error;
+    }
+    return data as OfflineImportResult;
+  }
+}
+
+export interface OfflineSaleRow {
+  product_name: string;
+  barcode: string;
+  quantity: number;
+  unit_price: number;
+  sale_date?: string;
+}
+
+export interface OfflineImportResult {
+  sale_id: string;
+  rows_imported: number;
+  units_imported: number;
+  total_amount: number;
 }

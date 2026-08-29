@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SupabaseService } from '../../services/supabase.service';
 import { InventoryLogicService } from '../../services/inventory-logic.service';
@@ -44,6 +44,23 @@ export class Dashboard implements OnInit {
   // Predictive Analytics Engine (IPO Model Outputs)
   predictiveAnalytics = signal<any[]>([]);
 
+  // Product movement ranking — most sold to least (Specific Objective #4)
+  movementRanking = signal<any[]>([]);
+  movementFilter = signal<'All' | 'Fast Moving' | 'Slow Moving' | 'No Movement'>('All');
+
+  // Which analytics table is on screen
+  analyticsTab = signal<'Forecast' | 'Movement'>('Forecast');
+
+  filteredMovement = computed(() => {
+    const filter = this.movementFilter();
+    const rows = this.movementRanking();
+    return filter === 'All' ? rows : rows.filter(r => r.movement === filter);
+  });
+
+  fastMovingCount = computed(() => this.movementRanking().filter(r => r.movement === 'Fast Moving').length);
+  slowMovingCount = computed(() => this.movementRanking().filter(r => r.movement === 'Slow Moving').length);
+  nearExpiryCount = computed(() => this.predictiveAnalytics().filter(a => a.nearestBatchRisk === 'High').length);
+
   // Timeframe and options menu state
   chartTimeframe = signal<'Weekly' | 'Monthly'>('Weekly');
   showTimeframeMenu = signal<boolean>(false);
@@ -64,6 +81,149 @@ export class Dashboard implements OnInit {
     this.chartTimeframe.set(tf);
     this.showTimeframeMenu.set(false);
     this.updateChart();
+  }
+
+  selectAnalyticsTab(tab: 'Forecast' | 'Movement') {
+    this.analyticsTab.set(tab);
+  }
+
+  selectMovementFilter(filter: 'All' | 'Fast Moving' | 'Slow Moving' | 'No Movement') {
+    this.movementFilter.set(filter);
+  }
+
+  /**
+   * Use Case Table 25 — export the analytics report the Admin is looking at.
+   */
+  exportReportCsv() {
+    this.showOptionsMenu.set(false);
+
+    const escapeCell = (value: any) => {
+      const text = String(value ?? '');
+      return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+
+    let headers: string[];
+    let rows: any[][];
+    let filename: string;
+
+    if (this.analyticsTab() === 'Movement') {
+      filename = 'inventrack-product-movement';
+      headers = ['Rank', 'Product', 'Category', 'Units Sold (30d)', 'Daily Average', 'Revenue', 'Movement'];
+      rows = this.filteredMovement().map(r => [
+        r.rank, r.name, r.category, r.unitsSold, r.dailyAverage, r.revenue.toFixed(2), r.movement
+      ]);
+    } else {
+      filename = 'inventrack-demand-forecast';
+      headers = ['Product', 'Category', 'Stock (Q)', 'Velocity (V)', 'Lead Time (L)', 'Safety Stock (ss)', 'ROP', 'SOQ', 'Status', 'Expiry Risk'];
+      rows = this.predictiveAnalytics().map(a => [
+        a.name, a.category, a.currentStock, a.dailyVelocity, a.leadTime,
+        a.safetyStock, a.rop, a.soq, a.status, a.nearestBatchRisk
+      ]);
+    }
+
+    const csv = [headers, ...rows]
+      .map(row => row.map(escapeCell).join(','))
+      .join('\r\n');
+
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${filename}-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  /**
+   * Use Case Table 25 — print the analytics report currently on screen.
+   */
+  printReport() {
+    this.showOptionsMenu.set(false);
+
+    const escapeHtml = (value: any) =>
+      String(value ?? '').replace(/[&<>"']/g, ch => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] as string
+      ));
+
+    const isMovement = this.analyticsTab() === 'Movement';
+    const title = isMovement ? 'Product Movement Report' : 'Demand Forecast Report';
+
+    const headers = isMovement
+      ? ['Rank', 'Product', 'Category', 'Units Sold (30d)', 'Daily Avg', 'Revenue', 'Movement']
+      : ['Product', 'Category', 'Stock (Q)', 'Velocity (V)', 'Lead Time (L)', 'Safety Stock', 'ROP', 'SOQ', 'Status'];
+
+    const bodyRows = isMovement
+      ? this.filteredMovement().map(r =>
+          [r.rank, r.name, r.category, r.unitsSold, r.dailyAverage, `P ${r.revenue.toFixed(2)}`, r.movement])
+      : this.predictiveAnalytics().map(a =>
+          [a.name, a.category, a.currentStock, a.dailyVelocity, a.leadTime, a.safetyStock, a.rop, a.soq, a.status]);
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <title>${title}</title>
+          <style>
+            @page { size: A4 landscape; margin: 12mm; }
+            body { font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 11px; }
+            h1 { font-size: 18px; margin: 0 0 2px; }
+            .sub { color: #666; font-size: 11px; margin-bottom: 14px; }
+            table { width: 100%; border-collapse: collapse; }
+            th { background: #f3f4f6; text-align: left; font-size: 10px; text-transform: uppercase;
+                 letter-spacing: .04em; padding: 6px; border-bottom: 2px solid #d1d5db; }
+            td { padding: 5px 6px; border-bottom: 1px solid #e5e7eb; }
+            tr:nth-child(even) td { background: #fafafa; }
+            .footer { margin-top: 16px; color: #666; font-size: 10px; }
+          </style>
+        </head>
+        <body>
+          <h1>InvenTrack — ${title}</h1>
+          <div class="sub">
+            Al-Bazar Enterprises &middot; Generated ${new Date().toLocaleString()}<br>
+            Velocity computed by Exponential Moving Average over a 30-day window (&alpha; = 2/(n+1)).
+          </div>
+          <table>
+            <thead><tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>
+            <tbody>
+              ${bodyRows.map(row =>
+                `<tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`
+              ).join('')}
+            </tbody>
+          </table>
+          <div class="footer">Generated by the InvenTrack Predictive Analytics Engine.</div>
+        </body>
+      </html>
+    `;
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) {
+      document.body.removeChild(iframe);
+      return;
+    }
+
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        if (iframe.parentNode) document.body.removeChild(iframe);
+      }, 1000);
+    }, 250);
   }
 
   openSaleModal(sale: any) {
@@ -151,9 +311,18 @@ export class Dashboard implements OnInit {
       
       const client = this.supabase.client;
 
+      // 0. Run the Predictive Analytics Engine before reading it back. This is the
+      //    Admin-side pass that persists forecasts, refreshes each batch's expiry
+      //    risk score, and raises or resolves LOW STOCK / NEAR EXPIRY alerts.
+      await this.inventoryLogic.runPredictiveAnalyticsForAll();
+
       // 1. Fetch Predictive Analytics Engine Outputs
-      const analyticsData = await this.inventoryLogic.getPredictiveAnalyticsSummary();
+      const [analyticsData, ranking] = await Promise.all([
+        this.inventoryLogic.getPredictiveAnalyticsSummary(),
+        this.inventoryLogic.getProductMovementRanking()
+      ]);
       this.predictiveAnalytics.set(analyticsData);
+      this.movementRanking.set(ranking);
 
       // Compute status totals from predictive engine
       const total = analyticsData.length;

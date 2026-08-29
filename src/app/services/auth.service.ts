@@ -138,7 +138,9 @@ export class AuthService {
       profile = profileById;
     }
 
-    // 2. If not found by user_id, fallback to matching by email
+    // 2. If not found by user_id, fall back to matching by email. This covers a
+    //    profile whose row was never linked to its auth.users id; the RLS policy
+    //    added in migration 00015 permits both lookups for one's own row.
     if (!profile && user.email) {
       const { data: profileByEmail } = await this.supabase
         .from('users')
@@ -148,57 +150,36 @@ export class AuthService {
 
       if (profileByEmail) {
         profile = profileByEmail;
-        // Sync user_id in public.users to match auth.users.id
-        await this.supabase
-          .from('users')
-          .update({ user_id: user.id })
-          .eq('email', user.email);
       }
     }
 
-    // 3. If profile still not found in public.users, auto-create a user profile
-    if (!profile && user.email) {
-      const defaultRole: UserRole = user.email.toLowerCase().includes('admin') ? 'Admin' : 'Cashier';
-      const fullName = user.user_metadata?.['full_name'] ?? user.email;
-
-      const { data: newProfile, error: insertError } = await this.supabase
-        .from('users')
-        .insert({
-          user_id: user.id,
-          email: user.email,
-          full_name: fullName,
-          role: defaultRole,
-          is_active: true
-        })
-        .select('role, full_name, is_active')
-        .maybeSingle();
-
-      if (!insertError && newProfile) {
-        profile = newProfile;
-      } else {
-        // Fallback in-memory profile if insert is constrained
-        profile = {
-          role: defaultRole,
-          full_name: fullName,
-          is_active: true
-        };
-      }
+    // 3. No profile means this account has not been provisioned in the system.
+    //
+    //    Fail closed. This previously fell back to an in-memory profile whose
+    //    role was guessed from the email address — any address containing
+    //    "admin" was granted the Admin role, and with it the admin navigation
+    //    and every Admin-guarded route. Roles must come from the database only.
+    if (!profile) {
+      return 'This account is not set up in InvenTrack. Please contact an administrator.';
     }
 
-    if (profile && profile.is_active === false) {
+    if (profile.is_active === false) {
       return 'This account has been deactivated. Please contact an admin.';
     }
 
-    const role = (profile?.role as UserRole) ?? 'Cashier';
-    const displayName = profile?.full_name ?? user.email ?? 'User';
+    // The role is whatever the database says, and nothing else. An unrecognised
+    // value is treated as no access rather than quietly downgraded.
+    if (profile.role !== 'Admin' && profile.role !== 'Cashier') {
+      return 'This account has no valid role assigned. Please contact an administrator.';
+    }
 
     this._currentUser.set({
       id:          user.id,
       email:       user.email ?? '',
-      role:        role,
-      displayName: displayName,
+      role:        profile.role as UserRole,
+      displayName: profile.full_name ?? user.email ?? 'User',
     });
-    
+
     return null;
   }
 }

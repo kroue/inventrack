@@ -1,8 +1,27 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Product, Suppliers } from '../../models/itrack.models';
 import { InventoryLogicService } from '../../services/inventory-logic.service';
+
+interface AdjustStockForm {
+  changeType: 'ADJUST' | 'Customer Return' | 'Return to Supplier';
+  /** Only meaningful for 'ADJUST', which is the one signed category. */
+  direction: 'Increase' | 'Decrease';
+  quantity: number;
+  reason: string;
+}
+
+interface DiscountRateRow {
+  product_id: string;
+  product_name: string;
+  category_name: string;
+  price: number;
+  /** Stored as a fraction (0.15) but edited as a percentage (15). */
+  discount_percent: number;
+  original_percent: number;
+  dirty: boolean;
+}
 
 @Component({
   selector: 'app-inventory',
@@ -45,6 +64,29 @@ export class Inventory implements OnInit {
   // Price History State
   priceHistory = signal<any[]>([]);
   isPriceHistoryModalOpen = signal<boolean>(false);
+
+  // Markdown Discount Rate State (Use Case Table 27)
+  isDiscountModalOpen = signal<boolean>(false);
+  isSavingDiscounts = signal<boolean>(false);
+  discountRows = signal<DiscountRateRow[]>([]);
+  bulkDiscountPercent = signal<number>(20);
+  discountError = signal<string | null>(null);
+  discountSuccess = signal<string | null>(null);
+
+  dirtyDiscountCount = computed(() => this.discountRows().filter(r => r.dirty).length);
+
+  // Adjust Stock State (Use Case Table 20)
+  isAdjustModalOpen = signal<boolean>(false);
+  isSubmittingAdjustment = signal<boolean>(false);
+  adjustProduct = signal<Product | null>(null);
+  adjustError = signal<string | null>(null);
+  adjustSuccess = signal<string | null>(null);
+  adjustForm = signal<AdjustStockForm>({
+    changeType: 'ADJUST',
+    direction: 'Decrease',
+    quantity: 1,
+    reason: ''
+  });
 
   async ngOnInit() {
     try {
@@ -231,7 +273,219 @@ export class Inventory implements OnInit {
       }
   }
 
-  async adjustStock(productId: string, batchId: string, quantityAdjusted: number, reason: string) {
-    // TODO: Implement stock adjustment
+  // ─── Adjust Stock (Use Case Table 20) ────────────────────────────────────
+
+  readonly adjustCategories: { value: AdjustStockForm['changeType']; label: string }[] = [
+    { value: 'ADJUST', label: 'Adjust' },
+    { value: 'Customer Return', label: 'Customer Return' },
+    { value: 'Return to Supplier', label: 'Return to Supplier' }
+  ];
+
+  adjustCategoryHint = computed(() => {
+    switch (this.adjustForm().changeType) {
+      case 'Customer Return':
+        return 'A customer brought goods back — stock is returned to the shelf.';
+      case 'Return to Supplier':
+        return 'Goods are being sent back to the supplier — stock leaves the shelf.';
+      default:
+        return 'A correction to the recorded quantity, such as a physical count or damaged goods.';
+    }
+  });
+
+  openAdjustModal(product: Product) {
+    this.adjustProduct.set(product);
+    this.adjustForm.set({
+      changeType: 'ADJUST',
+      direction: 'Decrease',
+      quantity: 1,
+      reason: ''
+    });
+    this.adjustError.set(null);
+    this.adjustSuccess.set(null);
+    this.isAdjustModalOpen.set(true);
+  }
+
+  closeAdjustModal() {
+    this.isAdjustModalOpen.set(false);
+    this.adjustProduct.set(null);
+    this.adjustError.set(null);
+    this.adjustSuccess.set(null);
+  }
+
+  setAdjustType(changeType: 'ADJUST' | 'Customer Return' | 'Return to Supplier') {
+    this.adjustForm.update(form => ({ ...form, changeType }));
+    this.adjustError.set(null);
+  }
+
+  setAdjustDirection(direction: 'Increase' | 'Decrease') {
+    this.adjustForm.update(form => ({ ...form, direction }));
+  }
+
+  updateAdjustField<K extends keyof AdjustStockForm>(field: K, value: AdjustStockForm[K]) {
+    this.adjustForm.update(form => ({ ...form, [field]: value }));
+    this.adjustError.set(null);
+  }
+
+  /**
+   * The net effect the current form will have on stock, shown to the admin
+   * before they commit so the sign of an ADJUST is never a surprise.
+   */
+  adjustPreview = computed(() => {
+    const form = this.adjustForm();
+    const product = this.adjustProduct();
+    if (!product) return null;
+
+    const current = this.stockMap[product.product_id] ?? 0;
+    const magnitude = Math.abs(Number(form.quantity) || 0);
+
+    let delta: number;
+    if (form.changeType === 'Customer Return') {
+      delta = magnitude;
+    } else if (form.changeType === 'Return to Supplier') {
+      delta = -magnitude;
+    } else {
+      delta = form.direction === 'Increase' ? magnitude : -magnitude;
+    }
+
+    return { current, delta, resulting: Math.max(0, current + delta) };
+  });
+
+  async submitAdjustment() {
+    const form = this.adjustForm();
+    const product = this.adjustProduct();
+    if (!product) return;
+
+    const magnitude = Math.abs(Number(form.quantity) || 0);
+
+    if (magnitude <= 0) {
+      this.adjustError.set('Quantity must be greater than zero.');
+      return;
+    }
+    if (!form.reason.trim()) {
+      this.adjustError.set('Please provide a reason for this adjustment.');
+      return;
+    }
+
+    // 'ADJUST' carries the sign; the two return categories are always positive.
+    const signedQuantity = form.changeType === 'ADJUST' && form.direction === 'Decrease'
+      ? -magnitude
+      : magnitude;
+
+    try {
+      this.isSubmittingAdjustment.set(true);
+      this.adjustError.set(null);
+
+      const result = await this.inventoryLogic.recordStockAdjustment(
+        product.product_id,
+        form.changeType,
+        signedQuantity,
+        form.reason.trim()
+      );
+
+      this.adjustSuccess.set(
+        `${form.changeType} recorded. ${product.product_name} is now at ${result.stock_quantity} in stock.`
+      );
+
+      await this.ngOnInit(); // Refresh stock figures
+      this.adjustForm.update(f => ({ ...f, quantity: 1, reason: '' }));
+    } catch (err: any) {
+      console.error('Stock adjustment failed', err);
+      this.adjustError.set(err.message || 'Failed to record the stock adjustment.');
+    } finally {
+      this.isSubmittingAdjustment.set(false);
+    }
+  }
+
+  // ─── Markdown Discount Rates (Use Case Table 27) ─────────────────────────
+
+  openDiscountRatesModal() {
+    this.discountError.set(null);
+    this.discountSuccess.set(null);
+
+    // Percentages are what the admin thinks in; the database stores a fraction.
+    this.discountRows.set(
+      this.products().map(p => {
+        const percent = Math.round((p.discount_rate ?? 0) * 100);
+        return {
+          product_id: p.product_id,
+          product_name: p.product_name,
+          category_name: p.category_name,
+          price: Number(p.price) || 0,
+          discount_percent: percent,
+          original_percent: percent,
+          dirty: false
+        };
+      })
+    );
+
+    this.isDiscountModalOpen.set(true);
+  }
+
+  closeDiscountRatesModal() {
+    this.isDiscountModalOpen.set(false);
+    this.discountRows.set([]);
+    this.discountError.set(null);
+    this.discountSuccess.set(null);
+  }
+
+  updateDiscountRow(index: number, value: number) {
+    const clamped = Math.min(100, Math.max(0, Math.round(Number(value) || 0)));
+
+    this.discountRows.update(rows => {
+      const next = [...rows];
+      const row = next[index];
+      if (!row) return rows;
+      next[index] = { ...row, discount_percent: clamped, dirty: clamped !== row.original_percent };
+      return next;
+    });
+
+    this.discountSuccess.set(null);
+  }
+
+  applyBulkDiscount() {
+    const clamped = Math.min(100, Math.max(0, Math.round(Number(this.bulkDiscountPercent()) || 0)));
+
+    this.discountRows.update(rows =>
+      rows.map(row => ({
+        ...row,
+        discount_percent: clamped,
+        dirty: clamped !== row.original_percent
+      }))
+    );
+
+    this.discountSuccess.set(null);
+  }
+
+  async saveDiscountRates() {
+    const changed = this.discountRows().filter(r => r.dirty);
+    if (changed.length === 0) return;
+
+    try {
+      this.isSavingDiscounts.set(true);
+      this.discountError.set(null);
+      this.discountSuccess.set(null);
+
+      for (const row of changed) {
+        await this.inventoryLogic.updateProduct(row.product_id, {
+          discount_rate: row.discount_percent / 100
+        });
+      }
+
+      // Mark the saved values as the new baseline.
+      this.discountRows.update(rows =>
+        rows.map(r => ({ ...r, original_percent: r.discount_percent, dirty: false }))
+      );
+
+      this.discountSuccess.set(
+        `Updated the markdown rate for ${changed.length} product(s).`
+      );
+
+      await this.ngOnInit(); // Refresh the product list with the new rates
+    } catch (err: any) {
+      console.error('Failed to save discount rates', err);
+      this.discountError.set(err.message || 'Failed to save discount rates.');
+    } finally {
+      this.isSavingDiscounts.set(false);
+    }
   }
 }

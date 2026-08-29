@@ -79,25 +79,36 @@ export class OfflineSync {
         const safeProductName = sanitizedProductName.replace(/<[^>]*>?/gm, '').trim();
         const safeBarcode = sanitizedBarcode.replace(/<[^>]*>?/gm, '').trim();
 
-        if (!safeProductName && !safeBarcode) {
-          throw new Error(`Row ${i + 1}: Product Name or Barcode is required.`);
+        // Barcode is the only lookup key. Product Name is carried through purely
+        // so the error messages name the item the cashier wrote down — matching
+        // on a hand-typed name risks resolving to the wrong product and
+        // deducting stock from it.
+        if (!safeBarcode) {
+          const hint = safeProductName ? ` (you wrote "${safeProductName}")` : '';
+          throw new Error(`Row ${i + 1}: Barcode is required${hint}.`);
         }
+
+        // Optional date column — preserved so the imported sale lands on the day
+        // it actually happened and feeds the EMA velocity correctly.
+        const rawDate = row['Date'] || row['date'] || row['Sale Date'] || row['sale_date'];
+        const saleDate = this.parseSheetDate(rawDate);
 
         sanitizedPayloads.push({
           product_name: safeProductName,
           barcode: safeBarcode,
           quantity: quantity,
           unit_price: unitPrice,
-          payment_method: 'Cash', // Default for offline sync
-          record_type: 'Excel Log'
+          ...(saleDate ? { sale_date: saleDate } : {})
         });
       }
 
-      // Process the sanitized payloads (This is where you'd map to actual product IDs in the DB)
-      // For this demo, we mock the successful database upload of the sanitized payload
-      console.log('Sanitized Payload ready for DB:', sanitizedPayloads);
-      
-      this.successMessage = `Successfully parsed and validated ${sanitizedPayloads.length} offline sales records!`;
+      // Commit the sheet to the database in a single transaction.
+      const result = await this.supabaseService.importOfflineSales(sanitizedPayloads);
+
+      this.successMessage =
+        `Imported ${result.rows_imported} offline sales record(s) — ` +
+        `${result.units_imported} unit(s), ₱${Number(result.total_amount).toFixed(2)} total. ` +
+        `Stock, batches and the stock log have been updated.`;
       this.selectedFile = null;
       this.fileName = '';
 
@@ -106,5 +117,23 @@ export class OfflineSync {
     } finally {
       this.isSyncing = false;
     }
+  }
+
+  /**
+   * Excel dates arrive either as a serial number or as a display string.
+   * Returns an ISO string, or null when the column is absent or unparseable —
+   * in which case the database falls back to the upload time.
+   */
+  private parseSheetDate(raw: any): string | null {
+    if (raw === undefined || raw === null || raw === '') return null;
+
+    if (typeof raw === 'number') {
+      const parsed = XLSX.SSF.parse_date_code(raw);
+      if (!parsed) return null;
+      return new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d, parsed.H || 0, parsed.M || 0, parsed.S || 0)).toISOString();
+    }
+
+    const asDate = new Date(String(raw));
+    return isNaN(asDate.getTime()) ? null : asDate.toISOString();
   }
 }

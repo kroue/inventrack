@@ -126,7 +126,7 @@
                             (click)="adjustQty(i, 1)">+</button>
                   </div>
 
-                  <!-- Expiry Badge -->
+                  <!-- Expiry Badge — reflects the earliest batch the line draws from -->
                   @if (item.riskLevel === 'High') {
                     <span class="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-medium border border-red-100">🔴 Exp: {{ item.daysRemaining }}d</span>
                   } @else if (item.riskLevel === 'Medium') {
@@ -134,14 +134,40 @@
                   } @else {
                     <span class="text-[10px] bg-green-50 text-green-600 px-2 py-0.5 rounded-full font-medium border border-green-100">✓ Fresh</span>
                   }
+
+                  @if (item.allocations.length > 1) {
+                    <span class="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-medium border border-blue-100"
+                      [title]="'This line is filled from ' + item.allocations.length + ' batches, earliest expiry first'">
+                      {{ item.allocations.length }} batches
+                    </span>
+                  }
                 </div>
+
+                <!-- Per-batch breakdown, shown when the line straddles markdown tiers -->
+                @if (item.hasMixedPricing) {
+                  <div class="mt-2 pl-2 border-l-2 border-blue-100 space-y-0.5">
+                    @for (alloc of item.allocations; track alloc.batch.batch_id) {
+                      <div class="flex justify-between text-[10px] text-gray-500">
+                        <span>
+                          {{ alloc.quantity }} &times; ₱{{ (alloc.unitPrice - alloc.discountApplied) | number:'1.2-2' }}
+                          @if (alloc.discountApplied > 0) {
+                            <span class="text-green-600 font-medium">(markdown, {{ alloc.daysRemaining }}d)</span>
+                          } @else {
+                            <span class="text-gray-400">({{ alloc.daysRemaining }}d)</span>
+                          }
+                        </span>
+                        <span class="tabular-nums">₱{{ alloc.subtotal | number:'1.2-2' }}</span>
+                      </div>
+                    }
+                  </div>
+                }
               </div>
 
               <div class="text-right flex flex-col items-end">
                 <div class="font-semibold text-gray-900 text-sm">₱{{ item.subtotal | number:'1.2-2' }}</div>
-                @if (item.discountApplied > 0) {
+                @if (item.discountTotal > 0) {
                   <div class="text-[10px] text-gray-400 line-through mt-0.5">₱{{ (item.originalPrice * item.quantity) | number:'1.2-2' }}</div>
-                  <div class="text-[9px] text-green-600 font-medium">-₱{{ (item.discountApplied * item.quantity) | number:'1.2-2' }}</div>
+                  <div class="text-[9px] text-green-600 font-medium">-₱{{ item.discountTotal | number:'1.2-2' }}</div>
                 }
                 <button (click)="removeFromCart(i)"
                         class="mt-2 text-gray-300 hover:text-red-400 transition-colors p-1 rounded-full hover:bg-red-50 btn-press">
@@ -292,8 +318,17 @@
         }
       </div>
 
-      <!-- Action Button -->
+      <!-- Action Buttons -->
       <div class="flex gap-3">
+        <button
+          (click)="printReceipt()"
+          class="flex-1 py-3 rounded-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 text-xs font-semibold shadow-sm transition-all btn-press flex items-center justify-center gap-1.5">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+          </svg>
+          Print Receipt
+        </button>
         <button
           (click)="closeSuccessModal()"
           class="flex-1 py-3 rounded-full bg-gray-900 hover:bg-black text-white text-xs font-semibold shadow-md transition-all btn-press">

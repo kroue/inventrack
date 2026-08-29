@@ -1,9 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { AuthService } from './services/auth.service';
-
-  import { signal } from '@angular/core';
+import { ConnectivityService } from './services/connectivity.service';
 
 @Component({
   selector: 'app-root',
@@ -13,6 +12,8 @@ import { AuthService } from './services/auth.service';
 })
 export class App {
   showLogoutModal = signal<boolean>(false);
+
+  readonly connectivity = inject(ConnectivityService);
 
   constructor(public auth: AuthService) {}
 

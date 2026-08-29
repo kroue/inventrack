@@ -9,6 +9,12 @@ export class InventoryLogicService {
   private supabaseService = inject(SupabaseService);
   private authService = inject(AuthService);
 
+  /** n — the moving average window, fixed at 30 days of historical data. */
+  readonly EMA_WINDOW_DAYS = 30;
+
+  /** P — the projection period used by the Suggested Order Quantity. */
+  readonly PROJECTION_PERIOD_DAYS = 30;
+
   constructor() { }
 
   /**
@@ -19,6 +25,83 @@ export class InventoryLogicService {
   calculateEMA(currentDaySales: number, previousEMA: number, windowDays: number = 30): number {
     const alpha = 2 / (windowDays + 1);
     return (currentDaySales * alpha) + (previousEMA * (1 - alpha));
+  }
+
+  /**
+   * 1a. Build a dense daily sales series (S_i,t) for the trailing window.
+   * Days with no transactions are explicitly zero — a missing day is a day the
+   * product did not sell, and dropping it would inflate the velocity.
+   */
+  buildDailySalesSeries(
+    salesRows: { date: Date | string; quantity_sold: number }[],
+    windowDays: number = 30,
+    endDate: Date = new Date()
+  ): number[] {
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const series = new Array<number>(windowDays).fill(0);
+
+    // Index 0 is the oldest day in the window, index windowDays-1 is `endDate`.
+    const endMidnight = new Date(endDate);
+    endMidnight.setHours(0, 0, 0, 0);
+
+    for (const row of salesRows) {
+      const rowDate = new Date(row.date);
+      if (isNaN(rowDate.getTime())) continue;
+      rowDate.setHours(0, 0, 0, 0);
+
+      const daysAgo = Math.round((endMidnight.getTime() - rowDate.getTime()) / msPerDay);
+      if (daysAgo < 0 || daysAgo >= windowDays) continue;
+
+      const idx = windowDays - 1 - daysAgo;
+      series[idx] += Number(row.quantity_sold) || 0;
+    }
+
+    return series;
+  }
+
+  /**
+   * 1b. Daily Sales Velocity (V_i,t) by folding the EMA recurrence over the series.
+   *
+   * V_i,t = (S_i,t * alpha) + (V_i,t-1 * (1 - alpha))
+   *
+   * The recurrence needs a seed for V_i,t-1. The simple mean of the window is used,
+   * which is the standard initialisation for exponential smoothing and keeps the
+   * estimate stable for the sparse, zero-heavy series typical of retail SKUs.
+   */
+  calculateVelocityEMA(dailySales: number[], windowDays: number = 30): number {
+    if (!dailySales || dailySales.length === 0) return 0;
+
+    const seed = dailySales.reduce((sum, qty) => sum + qty, 0) / dailySales.length;
+
+    let velocity = seed;
+    for (const daySales of dailySales) {
+      velocity = this.calculateEMA(daySales, velocity, windowDays);
+    }
+
+    return velocity;
+  }
+
+  /**
+   * 1c. Convenience wrapper: fetch the trailing sales history for a product and
+   * return its EMA-smoothed daily velocity.
+   */
+  async getSalesVelocity(productId: string, windowDays: number = 30): Promise<number> {
+    const supabase = this.supabaseService.client;
+
+    const windowStart = new Date();
+    windowStart.setDate(windowStart.getDate() - (windowDays - 1));
+    windowStart.setHours(0, 0, 0, 0);
+
+    const { data, error } = await supabase
+      .from('sales_history')
+      .select('quantity_sold, date')
+      .eq('product_id', productId)
+      .gte('date', windowStart.toISOString());
+
+    if (error) throw error;
+
+    const series = this.buildDailySalesSeries(data ?? [], windowDays);
+    return this.calculateVelocityEMA(series, windowDays);
   }
 
   /**
@@ -260,49 +343,60 @@ export class InventoryLogicService {
   }
 
   /**
-   * Process a return (Customer Return or Return to Supplier)
+   * Record a stock adjustment (Use Case Table 20).
+   *
+   * Handles all three categories the Admin can pick — Adjust, Customer Return and
+   * Return to Supplier. Delegates to the `record_stock_adjustment` RPC so that
+   * `inventory`, `batches` and `stock_log` all move inside one transaction; an
+   * adjustment that touched only the inventory total would leave the batch pool
+   * the POS reads from out of step.
+   *
+   * For 'ADJUST' the quantity is signed: positive increases stock, negative
+   * decreases it. The two return types always take a positive magnitude.
+   */
+  async recordStockAdjustment(
+    productId: string,
+    changeType: 'ADJUST' | 'Customer Return' | 'Return to Supplier',
+    quantity: number,
+    reason: string
+  ): Promise<StockAdjustmentResult> {
+    const { data, error } = await this.supabaseService.client.rpc('record_stock_adjustment', {
+      p_product_id: productId,
+      p_change_type: changeType,
+      p_quantity: quantity,
+      p_reason: reason
+    });
+
+    if (error) throw error;
+    return data as StockAdjustmentResult;
+  }
+
+  /**
+   * Process a return (Customer Return or Return to Supplier).
+   * Thin wrapper kept for the Stock Log screen's reversal flow.
    */
   async processReturn(productId: string, returnType: 'Customer Return' | 'Return to Supplier', quantity: number, remarks: string) {
-    const supabase = this.supabaseService.client;
-    
-    // 1. Get current inventory
-    const { data: invData, error: invError } = await supabase
-      .from('inventory')
-      .select('stock_quantity')
-      .eq('product_id', productId)
-      .single();
-      
-    if (invError) throw invError;
-    
-    const isAdding = returnType === 'Customer Return';
-    const newStock = isAdding 
-      ? invData.stock_quantity + quantity 
-      : invData.stock_quantity - quantity;
-      
-    if (!isAdding && newStock < 0) {
-      throw new Error('Not enough stock to return to supplier.');
-    }
+    return this.recordStockAdjustment(
+      productId,
+      returnType,
+      quantity,
+      remarks || `Logged ${returnType}`
+    );
+  }
 
-    // 2. Update inventory
-    const { error: updateError } = await supabase
-      .from('inventory')
-      .update({ stock_quantity: newStock })
-      .eq('product_id', productId);
-      
-    if (updateError) throw updateError;
-    
-    // 3. Create stock log
-    const { error: logError } = await supabase
-      .from('stock_log')
-      .insert({
-        product_id: productId,
-        quantity: quantity,
-        change_type: returnType,
-        remarks: remarks || `Logged ${returnType}`,
-        user_id: this.authService.currentUser()?.id || null
-      });
-      
-    if (logError) throw logError;
+  /**
+   * Update an existing supplier's contact details.
+   */
+  async updateSupplier(supplierId: string, updates: Partial<import('../models/itrack.models').Suppliers>): Promise<import('../models/itrack.models').Suppliers> {
+    const { data, error } = await this.supabaseService.client
+      .from('suppliers')
+      .update(updates)
+      .eq('supplier_id', supplierId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as import('../models/itrack.models').Suppliers;
   }
 
   /**
@@ -330,79 +424,232 @@ export class InventoryLogicService {
   /**
    * 5. Analyze Sales & Trigger Alerts in Supabase
    */
-  async runPredictiveAnalytics(productId: string, leadTimeDays: number = 2, safetyStock: number = 20) {
+  async runPredictiveAnalytics(productId: string, leadTimeDays?: number, safetyStock?: number) {
     try {
       const supabase = this.supabaseService.client;
-      
-      // 1. Fetch sales history for the last 30 days
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      
-      const { data: sales, error: salesError } = await supabase
-        .from('sales_history')
-        .select('quantity_sold, date')
-        .eq('product_id', productId)
-        .gte('date', thirtyDaysAgo.toISOString());
-        
-      if (salesError) throw salesError;
 
-      // Calculate sum of sales over 30 days to find average daily velocity
-      const totalSold = (sales ?? []).reduce((acc, sale) => acc + sale.quantity_sold, 0);
-      const dailyVelocity = totalSold / 30; // simplistic EMA for demonstration
-
-      // 2. Fetch current stock quantity
+      // 1. Fetch the product's own inventory parameters. The caller may override them,
+      //    but the stored lead time / safety stock are the authoritative values.
       const { data: inventory, error: invError } = await supabase
         .from('inventory')
-        .select('stock_quantity')
+        .select('stock_quantity, safety_stock, lead_time')
         .eq('product_id', productId)
         .maybeSingle();
-        
+
       if (invError) throw invError;
-      
+
       const currentStock = inventory?.stock_quantity ?? 0;
+      const effectiveLeadTime = leadTimeDays ?? inventory?.lead_time ?? 1;
+      const effectiveSafetyStock = safetyStock ?? inventory?.safety_stock ?? 0;
 
-      // 3. Compute ROP
-      const { rop, isLowStockAlert } = this.calculateROPAndTrigger(dailyVelocity, leadTimeDays, safetyStock, currentStock);
+      // 2. Daily Sales Velocity V_i,t via EMA over the trailing 30-day series
+      const dailyVelocity = await this.getSalesVelocity(productId, this.EMA_WINDOW_DAYS);
 
-      // 4. Update Forecasts table (requires UNIQUE constraint on product_id)
-      const { data: forecastData } = await supabase
+      // 3. Reorder Point ROP_i = (V_i * L_i) + ss_i, and the alert condition A_i
+      const { rop, isLowStockAlert } = this.calculateROPAndTrigger(
+        dailyVelocity,
+        effectiveLeadTime,
+        effectiveSafetyStock,
+        currentStock
+      );
+
+      // 4. Suggested Order Quantity O_i = (V_i * P) - Q_i
+      const suggestedOrderQty = this.calculateSuggestedOrderQuantity(
+        dailyVelocity,
+        this.PROJECTION_PERIOD_DAYS,
+        currentStock
+      );
+
+      // 5. Persist the forecast (forecasts.product_id is UNIQUE — see migration 00009)
+      const { data: forecastData, error: forecastError } = await supabase
         .from('forecasts')
-        .upsert({ 
-          product_id: productId, 
-          daily_velocity: dailyVelocity, 
+        .upsert({
+          product_id: productId,
+          daily_velocity: Number(dailyVelocity.toFixed(4)),
           calculated_rop: rop,
-          suggested_order_qty: Math.max(0, rop - currentStock)
+          suggested_order_qty: suggestedOrderQty
         }, { onConflict: 'product_id' })
         .select()
         .maybeSingle();
 
-      // 5. Trigger Alerts if needed
+      if (forecastError) throw forecastError;
+
+      // 6. Keep the inventory row's stored reorder point in step with the forecast so
+      //    every other screen reads the same threshold.
+      await supabase
+        .from('inventory')
+        .update({ reorder_point: rop })
+        .eq('product_id', productId);
+
+      // 7. Raise or resolve the LOW STOCK alert. Only one Active alert per product/type
+      //    is kept so the notification service does not spam on every sale.
       if (isLowStockAlert) {
-        const { data: alertData } = await supabase
-          .from('alerts')
-          .insert({
-            product_id: productId,
-            forecast_id: forecastData?.forecast_id,
-            alert_type: 'LOW STOCK',
-            status: 'Active'
-          })
-          .select()
-          .maybeSingle();
-          
-        if (alertData) {
-          await supabase
-            .from('restock_requests')
-            .insert({
-              product_id: productId,
-              alert_id: alertData.alert_id,
-              suggested_quantity: Math.max(0, rop - currentStock) + safetyStock,
-              status: 'Pending'
-            });
-        }
+        await this.raiseAlert(productId, 'LOW STOCK', forecastData?.forecast_id);
+        await this.upsertRestockRequest(productId, suggestedOrderQty);
+      } else {
+        await this.resolveAlerts(productId, 'LOW STOCK');
       }
+
+      return { dailyVelocity, rop, suggestedOrderQty, isLowStockAlert };
     } catch (err) {
       console.warn(`[runPredictiveAnalytics] Skipped for product ${productId}:`, err);
+      return null;
     }
+  }
+
+  /**
+   * 5a. Insert an Active alert unless one of the same type is already open.
+   * A row landing in `alerts` is what the database webhook listens for, so
+   * de-duplicating here is what keeps the email notifications sane.
+   */
+  private async raiseAlert(productId: string, alertType: 'LOW STOCK' | 'NEAR EXPIRY', forecastId?: string) {
+    const supabase = this.supabaseService.client;
+
+    const { data: existing } = await supabase
+      .from('alerts')
+      .select('alert_id')
+      .eq('product_id', productId)
+      .eq('alert_type', alertType)
+      .eq('status', 'Active')
+      .maybeSingle();
+
+    if (existing) return existing.alert_id as string;
+
+    const { data, error } = await supabase
+      .from('alerts')
+      .insert({
+        product_id: productId,
+        forecast_id: forecastId ?? null,
+        alert_type: alertType,
+        status: 'Active'
+      })
+      .select()
+      .maybeSingle();
+
+    if (error) throw error;
+    return data?.alert_id as string | undefined;
+  }
+
+  /**
+   * 5b. Close out Active alerts once the condition that raised them has cleared.
+   */
+  private async resolveAlerts(productId: string, alertType: 'LOW STOCK' | 'NEAR EXPIRY') {
+    await this.supabaseService.client
+      .from('alerts')
+      .update({ status: 'Resolved' })
+      .eq('product_id', productId)
+      .eq('alert_type', alertType)
+      .eq('status', 'Active');
+  }
+
+  /**
+   * 5c. Keep exactly one Pending restock request per product, refreshing its
+   * suggested quantity as the forecast moves.
+   */
+  private async upsertRestockRequest(productId: string, suggestedQuantity: number) {
+    const supabase = this.supabaseService.client;
+    if (suggestedQuantity <= 0) return;
+
+    const { data: existing } = await supabase
+      .from('restock_requests')
+      .select('request_id')
+      .eq('product_id', productId)
+      .eq('status', 'Pending')
+      .maybeSingle();
+
+    if (existing) {
+      await supabase
+        .from('restock_requests')
+        .update({ suggested_quantity: suggestedQuantity })
+        .eq('request_id', existing.request_id);
+      return;
+    }
+
+    await supabase
+      .from('restock_requests')
+      .insert({
+        product_id: productId,
+        suggested_quantity: suggestedQuantity,
+        status: 'Pending'
+      });
+  }
+
+  /**
+   * 6. Automated expiry monitoring.
+   * Re-classifies every open batch against the Expiry Risk Formula and raises a
+   * NEAR EXPIRY alert for products holding high-risk stock.
+   *
+   *   Days Remaining > 30       -> Normal
+   *   15 <= Days Remaining <= 30 -> Warning     (dashboard warning flag)
+   *   Days Remaining <= 14      -> Near-Expiry  (markdown applies)
+   */
+  async refreshExpiryRisk(): Promise<{ scanned: number; nearExpiry: number }> {
+    const supabase = this.supabaseService.client;
+
+    const { data: batches, error } = await supabase
+      .from('batches')
+      .select('batch_id, product_id, batch_expiration, risk_score')
+      .gt('quantity_remaining', 0);
+
+    if (error) throw error;
+    if (!batches || batches.length === 0) return { scanned: 0, nearExpiry: 0 };
+
+    const now = new Date();
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const productsAtRisk = new Set<string>();
+    const productsScanned = new Set<string>();
+
+    for (const batch of batches) {
+      productsScanned.add(batch.product_id);
+
+      const daysRemaining = Math.floor(
+        (new Date(batch.batch_expiration).getTime() - now.getTime()) / msPerDay
+      );
+
+      let risk: 'Normal' | 'Warning' | 'Near-Expiry';
+      if (daysRemaining > 30) {
+        risk = 'Normal';
+      } else if (daysRemaining > 14) {
+        risk = 'Warning';
+      } else {
+        risk = 'Near-Expiry';
+        productsAtRisk.add(batch.product_id);
+      }
+
+      // Only write when the classification actually changed.
+      if (risk !== batch.risk_score) {
+        await supabase
+          .from('batches')
+          .update({ risk_score: risk })
+          .eq('batch_id', batch.batch_id);
+      }
+    }
+
+    for (const productId of productsScanned) {
+      if (productsAtRisk.has(productId)) {
+        await this.raiseAlert(productId, 'NEAR EXPIRY');
+      } else {
+        await this.resolveAlerts(productId, 'NEAR EXPIRY');
+      }
+    }
+
+    return { scanned: productsScanned.size, nearExpiry: productsAtRisk.size };
+  }
+
+  /**
+   * 7. Run the full engine across every product. Used by the dashboard on load and
+   * after procurement events so forecasts, alerts and restock requests stay current.
+   */
+  async runPredictiveAnalyticsForAll(): Promise<void> {
+    const supabase = this.supabaseService.client;
+    const { data: products, error } = await supabase.from('products').select('product_id');
+    if (error) throw error;
+
+    for (const product of products ?? []) {
+      await this.runPredictiveAnalytics(product.product_id);
+    }
+
+    await this.refreshExpiryRisk();
   }
 
   /**
@@ -418,48 +665,78 @@ export class InventoryLogicService {
 
     if (!products || products.length === 0) return [];
 
+    // One query for the whole trailing window, then bucket per product in memory —
+    // far cheaper than a sales_history round trip per product.
+    const windowStart = new Date();
+    windowStart.setDate(windowStart.getDate() - (this.EMA_WINDOW_DAYS - 1));
+    windowStart.setHours(0, 0, 0, 0);
+
+    const { data: salesRows } = await supabase
+      .from('sales_history')
+      .select('product_id, quantity_sold, date')
+      .gte('date', windowStart.toISOString());
+
+    const salesByProduct = new Map<string, { date: Date | string; quantity_sold: number }[]>();
+    for (const row of salesRows ?? []) {
+      const bucket = salesByProduct.get(row.product_id) ?? [];
+      bucket.push({ date: row.date, quantity_sold: row.quantity_sold });
+      salesByProduct.set(row.product_id, bucket);
+    }
+
     const summaryList = [];
 
     for (const prod of products) {
-      const inv = prod.inventory?.[0] || { stock_quantity: 0, safety_stock: 10, lead_time: 2, reorder_point: 20 };
-      
-      // Fetch sales history for EMA calculation
-      const { data: sales } = await supabase
-        .from('sales_history')
-        .select('quantity_sold')
-        .eq('product_id', prod.product_id);
+      const inv = prod.inventory?.[0] || { stock_quantity: 0, safety_stock: 0, lead_time: 1, reorder_point: 0 };
 
-      const totalSold = (sales || []).reduce((sum, s) => sum + (s.quantity_sold || 0), 0);
-      const daysCount = 30;
-      
-      // 1. Daily Velocity (EMA) V_i
-      const dailyVelocity = totalSold > 0 ? Number((totalSold / daysCount).toFixed(2)) : 0.85;
+      // 1. Daily Velocity V_i,t — EMA over the dense 30-day series.
+      //    No sales in the window means a velocity of zero; inventing a floor
+      //    would fabricate demand the business never saw.
+      const series = this.buildDailySalesSeries(
+        salesByProduct.get(prod.product_id) ?? [],
+        this.EMA_WINDOW_DAYS
+      );
+      const dailyVelocity = Number(this.calculateVelocityEMA(series, this.EMA_WINDOW_DAYS).toFixed(2));
 
-      // 2. Reorder Point (ROP) ROP_i = (V_i * L_i) + ss_i
-      const leadTime = inv.lead_time || 2;
-      const safetyStock = inv.safety_stock || 10;
-      const rop = Math.ceil((dailyVelocity * leadTime) + safetyStock);
+      const totalSold = series.reduce((sum, qty) => sum + qty, 0);
 
-      // 3. Status A_i = 1 if Q_i <= ROP_i else 0
+      // 2. Reorder Point ROP_i = (V_i * L_i) + ss_i, and 3. status A_i
+      const leadTime = inv.lead_time ?? 1;
+      const safetyStock = inv.safety_stock ?? 0;
       const currentStock = inv.stock_quantity || 0;
-      const isLowStock = currentStock <= rop;
+      const { rop, isLowStockAlert: isLowStock } = this.calculateROPAndTrigger(
+        dailyVelocity,
+        leadTime,
+        safetyStock,
+        currentStock
+      );
       const alertStatus = isLowStock ? 'Low Stock Alert' : 'Optimal';
 
       // 4. Suggested Order Quantity O_i = (V_i * P) - Q_i
-      const projectionPeriod = 30; // P = 30 days
-      const rawSOQ = (dailyVelocity * projectionPeriod) - currentStock;
-      const soq = Math.max(0, Math.ceil(rawSOQ));
+      const soq = this.calculateSuggestedOrderQuantity(
+        dailyVelocity,
+        this.PROJECTION_PERIOD_DAYS,
+        currentStock
+      );
 
-      // 5. Expiry Risk Markdown evaluation
-      let nearestBatchRisk = 'Normal';
-      let discountRate = 0;
-      if (prod.batches && prod.batches.length > 0) {
-        const sortedBatches = prod.batches.sort((a: any, b: any) => 
+      // 5. Expiry Risk Markdown evaluation against the product's own discount rate
+      let nearestBatchRisk = 'Low';
+      let discountApplied = 0;
+      let daysToExpiry: number | null = null;
+      const openBatches = (prod.batches || []).filter((b: any) => b.quantity_remaining > 0);
+      if (openBatches.length > 0) {
+        const sortedBatches = [...openBatches].sort((a: any, b: any) =>
           new Date(a.batch_expiration).getTime() - new Date(b.batch_expiration).getTime()
         );
-        const evalResult = this.evaluateExpiryMarkdown(prod.price, new Date(sortedBatches[0].batch_expiration));
+        const nearestExpiry = new Date(sortedBatches[0].batch_expiration);
+        const evalResult = this.evaluateExpiryMarkdown(
+          prod.price,
+          nearestExpiry,
+          new Date(),
+          prod.discount_rate ?? 0
+        );
         nearestBatchRisk = evalResult.riskLevel;
-        discountRate = evalResult.discountApplied;
+        discountApplied = evalResult.discountApplied;
+        daysToExpiry = Math.floor((nearestExpiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
       }
 
       summaryList.push({
@@ -468,6 +745,7 @@ export class InventoryLogicService {
         category: prod.category_name,
         currentStock,
         dailyVelocity,
+        totalSold,
         leadTime,
         safetyStock,
         rop,
@@ -475,11 +753,82 @@ export class InventoryLogicService {
         isLowStock,
         soq,
         price: prod.price,
+        discountRate: prod.discount_rate ?? 0,
         nearestBatchRisk,
-        discountRate
+        discountApplied,
+        daysToExpiry
       });
     }
 
     return summaryList;
   }
+
+  /**
+   * 8. Product movement ranking — fast moving to slow moving.
+   * Ranks every product by units sold across the window so the admin can see the
+   * most sold products down to the least, per Specific Objective #4.
+   */
+  async getProductMovementRanking(windowDays: number = 30): Promise<any[]> {
+    const supabase = this.supabaseService.client;
+
+    const windowStart = new Date();
+    windowStart.setDate(windowStart.getDate() - (windowDays - 1));
+    windowStart.setHours(0, 0, 0, 0);
+
+    const { data: products, error: prodError } = await supabase
+      .from('products')
+      .select('product_id, product_name, category_name, price');
+    if (prodError) throw prodError;
+    if (!products || products.length === 0) return [];
+
+    const { data: salesRows, error: salesError } = await supabase
+      .from('sales_history')
+      .select('product_id, quantity_sold, date')
+      .gte('date', windowStart.toISOString());
+    if (salesError) throw salesError;
+
+    const soldByProduct = new Map<string, number>();
+    for (const row of salesRows ?? []) {
+      soldByProduct.set(
+        row.product_id,
+        (soldByProduct.get(row.product_id) ?? 0) + (Number(row.quantity_sold) || 0)
+      );
+    }
+
+    const ranked = products
+      .map(prod => {
+        const unitsSold = soldByProduct.get(prod.product_id) ?? 0;
+        return {
+          productId: prod.product_id,
+          name: prod.product_name,
+          category: prod.category_name,
+          unitsSold,
+          revenue: unitsSold * Number(prod.price || 0),
+          dailyAverage: Number((unitsSold / windowDays).toFixed(2))
+        };
+      })
+      .sort((a, b) => b.unitsSold - a.unitsSold);
+
+    // Classify against the mean so "fast" and "slow" are relative to this catalogue
+    // rather than an arbitrary hard-coded threshold.
+    const totalUnits = ranked.reduce((sum, r) => sum + r.unitsSold, 0);
+    const meanUnits = ranked.length > 0 ? totalUnits / ranked.length : 0;
+
+    return ranked.map((row, index) => ({
+      ...row,
+      rank: index + 1,
+      movement:
+        row.unitsSold === 0 ? 'No Movement'
+        : row.unitsSold >= meanUnits ? 'Fast Moving'
+        : 'Slow Moving'
+    }));
+  }
+}
+
+export interface StockAdjustmentResult {
+  product_id: string;
+  change_type: 'ADJUST' | 'Customer Return' | 'Return to Supplier';
+  quantity: number;
+  direction: 'IN' | 'OUT';
+  stock_quantity: number;
 }
