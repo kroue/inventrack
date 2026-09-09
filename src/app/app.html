@@ -22,9 +22,10 @@
   </div>
 }
 
-<!-- Full-screen shell: show sidebar only when authenticated -->
-<div class="flex w-full bg-white text-gray-800 overflow-hidden"
-  [ngClass]="connectivity.isOnline() ? 'h-screen' : 'h-[calc(100vh-2.75rem)]'">
+<!-- Full-screen shell: show sidebar only when authenticated.
+     Takes the remaining height rather than a fixed viewport height, so the
+     offline notice above can be any size without pushing content off-screen. -->
+<div class="flex flex-1 min-h-0 w-full bg-white text-gray-800 overflow-hidden">
 
   @if (auth.isLoggedIn()) {
     <!-- Sidebar — with stagger entrance -->

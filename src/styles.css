@@ -14,6 +14,9 @@ html, body {
 
 app-root {
   display: flex;
+  /* Column, so the offline notice stacks above the shell instead of sitting
+     beside it as a second flex item. */
+  flex-direction: column;
   height: 100%;
   width: 100%;
 }

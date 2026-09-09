@@ -52,6 +52,39 @@ export class SupabaseService {
   }
 
   /**
+   * Cashier account lifecycle, via the manage-staff Edge Function.
+   *
+   * Creating a login needs the Supabase Admin API and therefore the service role
+   * key, which must never reach the browser — so this goes through a function
+   * rather than the client. Admin accounts are intentionally out of scope and
+   * are provisioned in the Supabase dashboard.
+   */
+  async manageStaff(request: StaffRequest): Promise<{ ok: boolean; [key: string]: any }> {
+    const { data, error } = await this.client.functions.invoke('manage-staff', {
+      body: request
+    });
+
+    if (error) {
+      // The function returns a JSON body explaining the refusal; surface that
+      // rather than the generic "Edge Function returned a non-2xx status code".
+      let detail = error.message;
+      try {
+        const ctx = (error as any).context;
+        if (ctx && typeof ctx.json === 'function') {
+          const body = await ctx.json();
+          if (body?.error) detail = body.error;
+        }
+      } catch {
+        // fall back to the generic message
+      }
+      throw new Error(detail);
+    }
+
+    if (data?.error) throw new Error(data.error);
+    return data;
+  }
+
+  /**
    * Helper to commit an uploaded offline (Excel Log) sales sheet via RPC.
    * The whole sheet is imported inside one database transaction, so a bad row
    * rejects the entire file rather than leaving a half-recorded day of sales.
@@ -66,6 +99,16 @@ export class SupabaseService {
     }
     return data as OfflineImportResult;
   }
+}
+
+export type StaffAction = 'create' | 'update' | 'delete';
+
+export interface StaffRequest {
+  action: StaffAction;
+  user_id?: string;
+  email?: string;
+  full_name?: string;
+  password?: string;
 }
 
 export interface OfflineSaleRow {

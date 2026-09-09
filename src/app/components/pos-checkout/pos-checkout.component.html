@@ -127,7 +127,9 @@
                   </div>
 
                   <!-- Expiry Badge — reflects the earliest batch the line draws from -->
-                  @if (item.riskLevel === 'High') {
+                  @if (item.riskLevel === 'Expired') {
+                    <span class="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-bold border border-red-700">⛔ EXPIRED</span>
+                  } @else if (item.riskLevel === 'High') {
                     <span class="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-medium border border-red-100">🔴 Exp: {{ item.daysRemaining }}d</span>
                   } @else if (item.riskLevel === 'Medium') {
                     <span class="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-medium border border-yellow-100">⚠️ {{ item.daysRemaining }}d</span>
@@ -150,7 +152,9 @@
                       <div class="flex justify-between text-[10px] text-gray-500">
                         <span>
                           {{ alloc.quantity }} &times; ₱{{ (alloc.unitPrice - alloc.discountApplied) | number:'1.2-2' }}
-                          @if (alloc.discountApplied > 0) {
+                          @if (alloc.riskLevel === 'Expired') {
+                            <span class="text-red-600 font-bold">(EXPIRED)</span>
+                          } @else if (alloc.discountApplied > 0) {
                             <span class="text-green-600 font-medium">(markdown, {{ alloc.daysRemaining }}d)</span>
                           } @else {
                             <span class="text-gray-400">({{ alloc.daysRemaining }}d)</span>

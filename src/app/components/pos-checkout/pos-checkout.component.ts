@@ -16,7 +16,7 @@ interface BatchAllocation {
   quantity: number;
   unitPrice: number;
   discountApplied: number;
-  riskLevel: 'Low' | 'Medium' | 'High';
+  riskLevel: 'Low' | 'Medium' | 'High' | 'Expired';
   daysRemaining: number;
   subtotal: number;
 }
@@ -31,7 +31,7 @@ interface CartItem {
   /** Total money taken off this line by near-expiry markdowns. */
   discountTotal: number;
   /** Risk of the earliest-expiring batch the line draws from. */
-  riskLevel: 'Low' | 'Medium' | 'High';
+  riskLevel: 'Low' | 'Medium' | 'High' | 'Expired';
   daysRemaining: number;
   /** True when the line draws from batches at different markdown tiers. */
   hasMixedPricing: boolean;
@@ -148,11 +148,14 @@ export class PosCheckoutComponent implements OnInit {
 
       this.batches.set(batchData ?? []);
 
-      // Sellable stock is the sum of the open batches, because that is what the
-      // checkout draws from. Showing the inventory total here would let a
-      // cashier build a cart the server then rejects.
+      // Sellable stock is the sum of the open, unexpired batches, because that is
+      // what the checkout draws from. Showing the inventory total here would let
+      // a cashier build a cart the server then rejects, and counting expired
+      // batches would advertise stock that can no longer be sold.
+      const now = new Date();
       const availableByProduct = new Map<string, number>();
       for (const batch of batchData ?? []) {
+        if (this.inventoryLogic.isExpired(batch.batch_expiration, now)) continue;
         availableByProduct.set(
           batch.product_id,
           (availableByProduct.get(batch.product_id) ?? 0) + batch.quantity_remaining
@@ -252,9 +255,29 @@ export class PosCheckoutComponent implements OnInit {
    * will consume them in.
    */
   private fefoBatches(productId: string): Batches[] {
+    const now = new Date();
     return this.batches()
-      .filter(b => b.product_id === productId && b.quantity_remaining > 0)
+      .filter(b =>
+        b.product_id === productId &&
+        b.quantity_remaining > 0 &&
+        // Expired goods are never offered for sale. They stay on the books until
+        // an admin writes them off through Adjust Stock, which is what keeps the
+        // loss visible instead of quietly discounting it onto a customer.
+        !this.inventoryLogic.isExpired(b.batch_expiration, now)
+      )
       .sort((a, b) => new Date(a.batch_expiration).getTime() - new Date(b.batch_expiration).getTime());
+  }
+
+  /** Units on the books for a product that are already past their expiry date. */
+  private expiredUnits(productId: string): number {
+    const now = new Date();
+    return this.batches()
+      .filter(b =>
+        b.product_id === productId &&
+        b.quantity_remaining > 0 &&
+        this.inventoryLogic.isExpired(b.batch_expiration, now)
+      )
+      .reduce((sum, b) => sum + b.quantity_remaining, 0);
   }
 
   /** Total sellable units across every open batch. */
@@ -320,12 +343,20 @@ export class PosCheckoutComponent implements OnInit {
     const available = this.availableUnits(product.product_id);
 
     if (available <= 0) {
+      const expired = this.expiredUnits(product.product_id);
       const recordedStock = product.stock_quantity ?? 0;
-      this.validationError.set(
-        recordedStock > 0
-          ? `No active batch found for ${product.product_name}. Please check inventory records.`
-          : `Out of stock for ${product.product_name}!`
-      );
+
+      if (expired > 0) {
+        this.validationError.set(
+          `${product.product_name} cannot be sold — all ${expired} remaining unit(s) are past their expiry date. Pull them from the shelf and write them off in Inventory.`
+        );
+      } else {
+        this.validationError.set(
+          recordedStock > 0
+            ? `No active batch found for ${product.product_name}. Please check inventory records.`
+            : `Out of stock for ${product.product_name}!`
+        );
+      }
       return;
     }
 

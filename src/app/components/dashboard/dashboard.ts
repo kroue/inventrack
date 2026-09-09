@@ -60,6 +60,7 @@ export class Dashboard implements OnInit {
   fastMovingCount = computed(() => this.movementRanking().filter(r => r.movement === 'Fast Moving').length);
   slowMovingCount = computed(() => this.movementRanking().filter(r => r.movement === 'Slow Moving').length);
   nearExpiryCount = computed(() => this.predictiveAnalytics().filter(a => a.nearestBatchRisk === 'High').length);
+  expiredCount = computed(() => this.predictiveAnalytics().filter(a => a.nearestBatchRisk === 'Expired').length);
 
   // Timeframe and options menu state
   chartTimeframe = signal<'Weekly' | 'Monthly'>('Weekly');

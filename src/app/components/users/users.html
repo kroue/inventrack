@@ -112,6 +112,11 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
               </svg>
             </button>
+            <button (click)="confirmDeleteUser(user)" class="p-1 rounded-full hover:bg-red-50 transition-colors group btn-press" title="Delete Cashier">
+              <svg class="w-4 h-4 text-gray-400 group-hover:text-red-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+              </svg>
+            </button>
           </div>
         </div>
       }
@@ -157,16 +162,35 @@
             </select>
           </div>
 
-          <div class="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
-            <p class="text-[11px] text-blue-900 leading-relaxed">
-              <span class="font-semibold">Create the login first.</span>
-              Sign-in is handled by Supabase Auth, so add this email under
-              <span class="font-medium">Authentication &rarr; Users</span> in the Supabase
-              dashboard and set the password there, then add them here. InvenTrack
-              never stores passwords, and it will refuse to create a staff record
-              that has no matching login.
-            </p>
-          </div>
+          @if (newUserForm().role === 'Cashier') {
+            <div>
+              <label class="block text-xs font-medium text-gray-700 mb-1">Temporary Password</label>
+              <input type="password" autocomplete="new-password"
+                [ngModel]="newUserForm().password" (ngModelChange)="updateNewField('password', $event)"
+                placeholder="At least 8 characters"
+                class="w-full bg-[#F8F8F8] border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all">
+              <p class="text-[11px] text-gray-400 mt-1">
+                Used once to create the sign-in. It is sent straight to Supabase Auth and never stored by InvenTrack.
+              </p>
+            </div>
+
+            <div class="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3">
+              <p class="text-[11px] text-emerald-900 leading-relaxed">
+                <span class="font-semibold">The login is created for you.</span>
+                The cashier can sign in with this email and password straight away — no
+                extra setup in Supabase.
+              </p>
+            </div>
+          } @else {
+            <div class="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+              <p class="text-[11px] text-blue-900 leading-relaxed">
+                <span class="font-semibold">Administrator logins are created in Supabase.</span>
+                Add this email under <span class="font-medium">Authentication &rarr; Users</span>
+                in the dashboard and set the password there, then add them here to link
+                the staff record. This will be refused if no matching login exists.
+              </p>
+            </div>
+          }
         </div>
   
         <div class="mt-6 flex justify-end space-x-3 pt-4 border-t border-gray-100">
@@ -261,6 +285,48 @@
           <button type="button" (click)="saveEditedUser()" [disabled]="isSaving()"
             class="px-6 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50 shadow-sm">
             {{ isSaving() ? 'Saving...' : 'Save Changes' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Delete Cashier Confirmation -->
+@if (userToDelete(); as target) {
+  <div class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center animate-fade-in">
+    <div class="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden animate-scale-in">
+      <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+        <h3 class="text-sm font-bold text-gray-800">Delete Cashier</h3>
+        <button (click)="cancelDeleteUser()" class="text-gray-400 hover:text-gray-600 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <div class="p-6">
+        <p class="text-sm text-gray-700 mb-3">
+          Permanently remove <span class="font-bold text-gray-900">{{ target.name }}</span>
+          and their sign-in?
+        </p>
+        <p class="text-[11px] text-gray-500 leading-relaxed mb-5">
+          This deletes both the staff record and the Supabase Auth login. If they have
+          already recorded any sales or stock movements the deletion will be refused —
+          deactivate them instead so the audit trail stays intact.
+        </p>
+
+        @if (deleteError()) {
+          <div class="bg-red-50 text-red-700 px-4 py-3 rounded-xl text-xs border border-red-100 mb-4 leading-relaxed">
+            {{ deleteError() }}
+          </div>
+        }
+
+        <div class="flex justify-end space-x-3 pt-1">
+          <button type="button" (click)="cancelDeleteUser()" class="px-5 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors">
+            Cancel
+          </button>
+          <button type="button" (click)="executeDeleteUser()" [disabled]="isDeleting()"
+            class="px-5 py-2.5 text-sm font-bold bg-red-600 text-white rounded-xl hover:bg-red-700 shadow-sm transition-all btn-press disabled:opacity-50">
+            {{ isDeleting() ? 'Deleting...' : 'Delete Permanently' }}
           </button>
         </div>
       </div>

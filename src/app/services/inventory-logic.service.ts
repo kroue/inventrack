@@ -128,10 +128,18 @@ export class InventoryLogicService {
   /**
    * 4. Expiry Risk Framework & Dynamic Price Markdown Function
    */
-  evaluateExpiryMarkdown(retailPrice: number, expirationDate: Date, currentDate: Date = new Date(), discountRate: number = 0.20): { sellingPrice: number, riskLevel: 'Low' | 'Medium' | 'High', discountApplied: number } {
+  evaluateExpiryMarkdown(retailPrice: number, expirationDate: Date, currentDate: Date = new Date(), discountRate: number = 0.20): { sellingPrice: number, riskLevel: 'Low' | 'Medium' | 'High' | 'Expired', discountApplied: number } {
     const msPerDay = 1000 * 60 * 60 * 24;
     const daysRemaining = Math.floor((expirationDate.getTime() - currentDate.getTime()) / msPerDay);
-    
+
+    if (daysRemaining < 0) {
+      // Past its expiration date. The three tiers below describe stock that is
+      // still saleable, and marking expired goods down would be the opposite of
+      // what the expiry monitoring exists to do — so this is its own state and
+      // the caller is expected to withhold it from sale.
+      return { sellingPrice: retailPrice, riskLevel: 'Expired', discountApplied: 0 };
+    }
+
     if (daysRemaining > 30) {
       // Low Risk
       return { sellingPrice: retailPrice, riskLevel: 'Low', discountApplied: 0 };
@@ -144,6 +152,11 @@ export class InventoryLogicService {
       const sellingPrice = retailPrice - discountApplied;
       return { sellingPrice, riskLevel: 'High', discountApplied };
     }
+  }
+
+  /** True when a batch is past its expiration date and must not be sold. */
+  isExpired(batchExpiration: Date | string, now: Date = new Date()): boolean {
+    return new Date(batchExpiration).getTime() < now.getTime();
   }
 
   /**

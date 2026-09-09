@@ -22,16 +22,18 @@ export class Users implements OnInit {
   // Modal State
   isAddModalOpen = signal<boolean>(false);
   isSaving = signal<boolean>(false);
-  newUserForm = signal<{ full_name: string; email: string; role: 'Admin' | 'Cashier' }>({
+  newUserForm = signal<{ full_name: string; email: string; role: 'Admin' | 'Cashier'; password: string }>({
     full_name: '',
     email: '',
-    role: 'Cashier'
+    role: 'Cashier',
+    password: ''
   });
 
   // Edit Modal State (Use Case Table 18)
   isEditModalOpen = signal<boolean>(false);
   editingUserId = signal<string | null>(null);
   editUserForm = signal<{ full_name: string; email: string }>({ full_name: '', email: '' });
+  editingUserRole = signal<'Admin' | 'Cashier'>('Cashier');
   editError = signal<string | null>(null);
 
   async ngOnInit() {
@@ -58,7 +60,7 @@ export class Users implements OnInit {
   }
 
   openAddModal() {
-    this.newUserForm.set({ full_name: '', email: '', role: 'Cashier' });
+    this.newUserForm.set({ full_name: '', email: '', role: 'Cashier', password: '' });
     this.errorMessage.set(null);
     this.isAddModalOpen.set(true);
   }
@@ -74,25 +76,36 @@ export class Users implements OnInit {
       this.errorMessage.set('Name and email are both required');
       return;
     }
+    if (data.role === 'Cashier' && (data.password ?? '').length < 8) {
+      this.errorMessage.set('Set a temporary password of at least 8 characters for the cashier to sign in with.');
+      return;
+    }
 
     try {
       this.isSaving.set(true);
       this.errorMessage.set(null);
 
-      // Provisioning goes through the RPC rather than a direct insert. A plain
-      // insert leaves user_id defaulted to a random UUID, which never matches the
-      // account's auth.users id — the profile then fails every RLS check that
-      // resolves the role by user_id. The RPC derives it from auth.users, and
-      // refuses outright when no login exists yet.
-      //
-      // No password passes through here: sign-in is delegated to Supabase Auth.
-      const { error } = await this.supabase.client.rpc('create_staff_profile', {
-        p_email: data.email,
-        p_full_name: data.full_name,
-        p_role: data.role
-      });
-
-      if (error) throw error;
+      if (data.role === 'Cashier') {
+        // Cashiers are created end to end here — the Edge Function holds the
+        // service role key and makes the Supabase Auth login as well as the
+        // staff record, so the admin never leaves InvenTrack.
+        await this.supabase.manageStaff({
+          action: 'create',
+          email: data.email,
+          full_name: data.full_name,
+          password: data.password
+        });
+      } else {
+        // Administrator logins are provisioned in the Supabase dashboard on
+        // purpose, so this only links the existing account to a staff record.
+        // The RPC derives user_id from auth.users and refuses if none exists.
+        const { error } = await this.supabase.client.rpc('create_staff_profile', {
+          p_email: data.email,
+          p_full_name: data.full_name,
+          p_role: data.role
+        });
+        if (error) throw error;
+      }
       
       this.closeAddModal();
       await this.ngOnInit(); // Refresh list
@@ -108,6 +121,7 @@ export class Users implements OnInit {
 
   openEditModal(user: any) {
     this.editingUserId.set(user.user_id);
+    this.editingUserRole.set(user.role);
     this.editUserForm.set({ full_name: user.name, email: user.email });
     this.editError.set(null);
     this.isEditModalOpen.set(true);
@@ -119,7 +133,7 @@ export class Users implements OnInit {
     this.editError.set(null);
   }
 
-  updateNewField<K extends 'full_name' | 'email' | 'role'>(field: K, value: string) {
+  updateNewField<K extends 'full_name' | 'email' | 'role' | 'password'>(field: K, value: string) {
     this.newUserForm.update(form => ({ ...form, [field]: value }));
     this.errorMessage.set(null);
   }
@@ -143,15 +157,25 @@ export class Users implements OnInit {
       this.isSaving.set(true);
       this.editError.set(null);
 
-      const { error } = await this.supabase.client
-        .from('users')
-        .update({
+      if (this.editingUserRole() === 'Cashier') {
+        // Goes through the function so a changed address updates the Supabase
+        // Auth login too — otherwise they would sign in with the old email.
+        await this.supabase.manageStaff({
+          action: 'update',
+          user_id: userId,
           full_name: form.full_name.trim(),
           email: form.email.trim()
-        })
-        .eq('user_id', userId);
-
-      if (error) throw error;
+        });
+      } else {
+        const { error } = await this.supabase.client
+          .from('users')
+          .update({
+            full_name: form.full_name.trim(),
+            email: form.email.trim()
+          })
+          .eq('user_id', userId);
+        if (error) throw error;
+      }
 
       this.closeEditModal();
       await this.ngOnInit(); // Refresh list
@@ -160,6 +184,45 @@ export class Users implements OnInit {
       this.editError.set(err.message || 'Failed to update the user.');
     } finally {
       this.isSaving.set(false);
+    }
+  }
+
+  // ─── Delete cashier (Use Case Table 18 — "remove user") ─────────────────
+
+  userToDelete = signal<any>(null);
+  isDeleting = signal<boolean>(false);
+  deleteError = signal<string | null>(null);
+
+  confirmDeleteUser(user: any) {
+    this.userToDelete.set(user);
+    this.deleteError.set(null);
+  }
+
+  cancelDeleteUser() {
+    this.userToDelete.set(null);
+    this.deleteError.set(null);
+  }
+
+  async executeDeleteUser() {
+    const user = this.userToDelete();
+    if (!user) return;
+
+    try {
+      this.isDeleting.set(true);
+      this.deleteError.set(null);
+
+      // Removes the staff record and the Supabase Auth login together. The
+      // function refuses when the cashier has recorded transactions, so the
+      // audit trail can never be orphaned by a deletion.
+      await this.supabase.manageStaff({ action: 'delete', user_id: user.user_id });
+
+      this.userToDelete.set(null);
+      await this.ngOnInit();
+    } catch (err: any) {
+      console.error('Failed to delete user', err);
+      this.deleteError.set(err.message || 'Failed to delete the account.');
+    } finally {
+      this.isDeleting.set(false);
     }
   }
 
