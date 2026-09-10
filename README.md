@@ -433,7 +433,3 @@ scripts/             Environment generation, template generation
 > header row and the importer must match exactly.
 
 ---
-
-## Author
-
-**Aljohn Arranguez** — undergraduate research project, InvenTrack v1.0.
