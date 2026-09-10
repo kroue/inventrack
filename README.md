@@ -197,7 +197,27 @@ cd inventrack && npm install
 
 ### 2. Add your Supabase credentials
 
-Create `src/environments/environment.local.ts` — it is gitignored and never committed:
+Run the dev server once and it will create the credentials file for you and stop:
+
+```bash
+npm start
+```
+
+```
+  Created src/environments/environment.local.ts for you.
+
+  Supabase credentials are not set up yet.
+  Open this file and replace the two placeholder values:
+    src\environments\environment.local.ts
+```
+
+Open that file and fill in the two values from the Supabase dashboard under
+**Settings → API**:
+
+| Dashboard field | Goes in |
+| --- | --- |
+| Project URL | `supabaseUrl` |
+| `anon` `public` key | `supabaseAnonKey` |
 
 ```ts
 export const environment = {
@@ -207,8 +227,12 @@ export const environment = {
 };
 ```
 
-Both values are in the Supabase dashboard under **Settings → API**. Use the **anon**
-key here, never the service-role key — this file is compiled into the browser bundle.
+Use the **anon** key, never `service_role` — this file is compiled into the browser
+bundle, so a service-role key there would hand every visitor full database access
+with RLS bypassed. The startup check rejects it if you paste one by mistake.
+
+The file is gitignored and never committed, which is why a fresh clone has to do
+this step before the app will start.
 
 ### 3. Start the dev server
 
@@ -422,12 +446,13 @@ scripts/             Environment generation, template generation
 
 | Command | Purpose |
 | --- | --- |
-| `npm start` | Dev server on port 4200 |
+| `npm start` | Dev server on port 4200 (checks credentials first) |
 | `npm run build` | Production build (runs `prebuild` first) |
 | `npm test` | Unit tests (Vitest) |
 | `npx supabase db push` | Apply pending migrations |
 | `npx supabase migration list --linked` | Compare local and remote migrations |
 | `node scripts/generate-offline-template.js` | Rebuild the Excel template |
+| `node scripts/check-dev-env.js` | Verify local Supabase credentials |
 
 > If you rename a column in `offline-sync.ts`, regenerate the Excel template — the
 > header row and the importer must match exactly.

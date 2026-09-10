@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
+    "prestart": "node scripts/check-dev-env.js",
     "start": "ng serve",
     "prebuild": "node scripts/generate-env.js",
     "build": "ng build",
