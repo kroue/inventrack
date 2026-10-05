@@ -121,7 +121,28 @@ Deno.serve(async (req: Request) => {
   if (!response.ok) {
     const detail = await response.text();
     console.error(`Resend rejected the alert email: ${response.status} ${detail}`);
-    return new Response(JSON.stringify({ error: 'Failed to send alert email.' }), {
+
+    // Surface Resend's own reason in the response body. notify_alert_webhook()
+    // deliberately swallows failures so a notification can never roll back the
+    // sale that raised it, which means this body in net._http_response is the
+    // only place an operator can see why an alert never arrived. Resend's
+    // message names the specific problem — commonly that the shared test sender
+    // may only deliver to the account holder's own address.
+    let resendMessage = detail;
+    try {
+      const parsed = JSON.parse(detail);
+      resendMessage = parsed?.message ?? parsed?.error?.message ?? detail;
+    } catch {
+      // Not JSON — keep the raw text.
+    }
+
+    return new Response(JSON.stringify({
+      error: 'Failed to send alert email.',
+      resend_status: response.status,
+      resend_message: String(resendMessage).slice(0, 400),
+      attempted_from: sender,
+      attempted_to: recipient,
+    }), {
       status: 502,
       headers: { 'Content-Type': 'application/json' },
     });
