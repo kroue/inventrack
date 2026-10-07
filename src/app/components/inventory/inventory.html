@@ -45,6 +45,45 @@
     </div>
   </div>
 
+  <!-- Shelf life at a glance. Expiry was previously invisible here, so stock
+       could pass its date without anything on screen saying so. -->
+  @if (expiredUnitsTotal() > 0 || nearExpiryUnitsTotal() > 0 || warningUnitsTotal() > 0) {
+    <div class="flex flex-wrap items-center gap-2 mb-5 -mt-2 animate-fade-in-up delay-100">
+      <span class="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mr-1">Shelf life</span>
+
+      @if (expiredUnitsTotal() > 0) {
+        <button (click)="setExpiryFilter(expiryFilter() === 'Expired' ? 'All' : 'Expired')"
+          class="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-full border transition-all btn-press"
+          [ngClass]="expiryFilter() === 'Expired' ? 'bg-red-600 text-white border-red-600 shadow-sm' : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'">
+          <span class="w-1.5 h-1.5 rounded-full" [ngClass]="expiryFilter() === 'Expired' ? 'bg-white' : 'bg-red-500'"></span>
+          {{ expiredUnitsTotal() }} expired
+        </button>
+      }
+
+      @if (nearExpiryUnitsTotal() > 0) {
+        <button (click)="setExpiryFilter(expiryFilter() === 'Near-Expiry' ? 'All' : 'Near-Expiry')"
+          class="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-full border transition-all btn-press"
+          [ngClass]="expiryFilter() === 'Near-Expiry' ? 'bg-amber-500 text-white border-amber-500 shadow-sm' : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'">
+          <span class="w-1.5 h-1.5 rounded-full" [ngClass]="expiryFilter() === 'Near-Expiry' ? 'bg-white' : 'bg-amber-500'"></span>
+          {{ nearExpiryUnitsTotal() }} expiring within 14 days
+        </button>
+      }
+
+      @if (warningUnitsTotal() > 0) {
+        <span class="flex items-center gap-1.5 text-[11px] font-medium text-gray-500 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-full">
+          <span class="w-1.5 h-1.5 rounded-full bg-yellow-400"></span>
+          {{ warningUnitsTotal() }} within 30 days
+        </span>
+      }
+
+      @if (expiryFilter() !== 'All') {
+        <button (click)="setExpiryFilter('All')" class="text-[11px] font-semibold text-blue-600 hover:underline ml-1">
+          Show all products
+        </button>
+      }
+    </div>
+  }
+
   <!-- Product Grid / List -->
   <div class="flex-1 overflow-y-auto custom-scrollbar pb-10">
     @if (viewMode() === 'Grid') {
@@ -88,6 +127,27 @@
                   'bg-red-400': (product.stock_quantity ?? 0) <= 0
                 }"></span>
             </div>
+
+            @if (expiryOf(product); as exp) {
+              @if (exp.status !== 'Normal' && exp.status !== 'No batches') {
+                <button (click)="openBatchModal(product); $event.stopPropagation()"
+                  class="mt-2 self-start flex items-center gap-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors"
+                  [ngClass]="{
+                    'bg-red-50 text-red-700 border-red-200 hover:bg-red-100': exp.status === 'Expired',
+                    'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100': exp.status === 'Near-Expiry',
+                    'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100': exp.status === 'Warning'
+                  }"
+                  [title]="exp.batchCount + ' batch(es) — click for details'">
+                  @if (exp.status === 'Expired') {
+                    {{ exp.expiredUnits }} expired
+                  } @else if (exp.status === 'Near-Expiry') {
+                    {{ exp.nearExpiryUnits }} expiring in {{ exp.nearestDays }}d
+                  } @else {
+                    Expires in {{ exp.nearestDays }}d
+                  }
+                </button>
+              }
+            }
 
             <div class="mt-auto flex justify-between items-end">
               <span class="text-[18px] font-semibold text-gray-900">₱{{ product.price | number:'1.2-2' }}</span>
@@ -174,14 +234,36 @@
                 {{ stockMap[product.product_id] || 0 }} in stock
               </span>
             </div>
-            <div class="text-right flex justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button (click)="openAdjustModal(product)" title="Adjust stock" class="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors btn-press">
+            <div class="text-right flex justify-end items-center space-x-1">
+              @if (expiryOf(product); as exp) {
+                @if (exp.status !== 'Normal' && exp.status !== 'No batches') {
+                  <button (click)="openBatchModal(product)"
+                    class="mr-2 text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap transition-colors"
+                    [ngClass]="{
+                      'bg-red-50 text-red-700 border-red-200 hover:bg-red-100': exp.status === 'Expired',
+                      'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100': exp.status === 'Near-Expiry',
+                      'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100': exp.status === 'Warning'
+                    }">
+                    @if (exp.status === 'Expired') {
+                      {{ exp.expiredUnits }} expired
+                    } @else if (exp.status === 'Near-Expiry') {
+                      {{ exp.nearExpiryUnits }} expiring in {{ exp.nearestDays }}d
+                    } @else {
+                      Expires in {{ exp.nearestDays }}d
+                    }
+                  </button>
+                }
+              }
+              <button (click)="openBatchModal(product)" title="View batches" class="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors btn-press opacity-0 group-hover:opacity-100">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+              </button>
+              <button (click)="openAdjustModal(product)" title="Adjust stock" class="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors btn-press opacity-0 group-hover:opacity-100">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33"></path></svg>
               </button>
-              <button (click)="openEditModal(product)" class="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors btn-press">
+              <button (click)="openEditModal(product)" class="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors btn-press opacity-0 group-hover:opacity-100">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
               </button>
-              <button (click)="confirmDeleteProduct(product.product_id)" class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors btn-press">
+              <button (click)="confirmDeleteProduct(product.product_id)" class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors btn-press opacity-0 group-hover:opacity-100">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
               </button>
             </div>
@@ -674,6 +756,95 @@
         <button type="button" (click)="submitAdjustment()" [disabled]="isSubmittingAdjustment()"
           class="px-6 py-2.5 text-xs font-bold bg-gray-900 text-white rounded-full hover:bg-black shadow-md transition-all btn-press disabled:opacity-40">
           {{ isSubmittingAdjustment() ? 'Recording...' : 'Record Adjustment' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Modal: Batch shelf life for one product -->
+@if (isBatchModalOpen() && batchProduct(); as product) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-fade-in">
+    <div class="bg-white rounded-[24px] shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden animate-scale-in">
+
+      <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-start bg-gray-50/50">
+        <div>
+          <h3 class="text-base font-semibold text-gray-900">Batches &middot; {{ product.product_name }}</h3>
+          <p class="text-[11px] text-gray-500 mt-0.5">
+            Sold First Expired, First Out. Stock with 14 days or less is marked down automatically; expired stock is withheld from sale.
+          </p>
+        </div>
+        <button (click)="closeBatchModal()" class="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 ml-4">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto custom-scrollbar px-6 py-4">
+        @if (isLoadingBatches()) {
+          <div class="py-12 text-center text-gray-400 text-xs">Loading batches...</div>
+        } @else if (batchRows().length === 0) {
+          <div class="py-12 text-center text-gray-400">
+            <p class="text-xs font-medium">No open batches for this product.</p>
+            <p class="text-[11px] mt-1">Stock arrives in batches when a delivery is received in Procurement.</p>
+          </div>
+        } @else {
+          <div class="grid grid-cols-12 text-[10px] font-bold text-gray-400 uppercase tracking-wide pb-2 mb-1 border-b border-gray-200">
+            <div class="col-span-4">Expires</div>
+            <div class="col-span-3 text-center">Shelf life</div>
+            <div class="col-span-2 text-center">Remaining</div>
+            <div class="col-span-3 text-right">State</div>
+          </div>
+
+          @for (b of batchRows(); track b.batch_id) {
+            <div class="grid grid-cols-12 items-center py-2.5 border-b border-gray-50 text-xs">
+              <div class="col-span-4 font-medium text-gray-800">{{ b.expiryLabel }}</div>
+              <div class="col-span-3 text-center tabular-nums"
+                [ngClass]="b.days < 0 ? 'text-red-600 font-semibold' : (b.days <= 14 ? 'text-amber-600 font-semibold' : 'text-gray-500')">
+                @if (b.days < 0) {
+                  {{ -b.days }} days ago
+                } @else {
+                  {{ b.days }} days left
+                }
+              </div>
+              <div class="col-span-2 text-center tabular-nums font-semibold text-gray-900">
+                {{ b.quantity_remaining }}
+                <span class="text-[10px] text-gray-400 font-normal">/ {{ b.quantity_received }}</span>
+              </div>
+              <div class="col-span-3 text-right">
+                <span class="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border"
+                  [ngClass]="{
+                    'bg-red-100 text-red-700 border-red-200': b.state === 'Expired',
+                    'bg-amber-100 text-amber-700 border-amber-200': b.state === 'Near-Expiry',
+                    'bg-yellow-50 text-yellow-700 border-yellow-200': b.state === 'Warning',
+                    'bg-green-50 text-green-700 border-green-200': b.state === 'Normal'
+                  }">
+                  {{ b.state }}
+                </span>
+              </div>
+            </div>
+          }
+
+          @if (expiryOf(product); as exp) {
+            @if (exp.expiredUnits > 0) {
+              <div class="mt-4 bg-red-50 border border-red-100 rounded-2xl px-4 py-3">
+                <p class="text-[11px] text-red-800 leading-relaxed">
+                  <span class="font-semibold">{{ exp.expiredUnits }} unit(s) cannot be sold.</span>
+                  The POS withholds expired stock, so it will keep counting toward inventory until it is
+                  written off. Use <span class="font-medium">Adjust Stock</span> with a reason such as
+                  "expired stock pulled" to remove it and keep the loss on record.
+                </p>
+              </div>
+            }
+          }
+        }
+      </div>
+
+      <div class="px-6 py-4 bg-gray-50/50 border-t border-gray-100 flex justify-between items-center">
+        <span class="text-[11px] text-gray-500">
+          {{ batchRows().length }} open batch(es)
+        </span>
+        <button (click)="closeBatchModal()" class="px-6 py-2.5 text-xs font-bold bg-gray-900 text-white rounded-full hover:bg-black shadow-md transition-all btn-press">
+          Close
         </button>
       </div>
     </div>

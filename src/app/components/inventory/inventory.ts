@@ -2,7 +2,7 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Product, Suppliers } from '../../models/itrack.models';
-import { InventoryLogicService } from '../../services/inventory-logic.service';
+import { InventoryLogicService, ExpirySummary } from '../../services/inventory-logic.service';
 
 interface AdjustStockForm {
   changeType: 'ADJUST' | 'Customer Return' | 'Return to Supplier';
@@ -65,6 +65,79 @@ export class Inventory implements OnInit {
   priceHistory = signal<any[]>([]);
   isPriceHistoryModalOpen = signal<boolean>(false);
 
+  // ─── Shelf life ──────────────────────────────────────────────────────────
+
+  /** Narrows the grid to stock that needs attention. */
+  expiryFilter = signal<'All' | 'Near-Expiry' | 'Expired'>('All');
+
+  isBatchModalOpen = signal<boolean>(false);
+  batchProduct = signal<Product | null>(null);
+  batchRows = signal<any[]>([]);
+  isLoadingBatches = signal<boolean>(false);
+
+  expiredUnitsTotal = computed(() =>
+    this.products().reduce((sum, p) => sum + ((p as any).expiry?.expiredUnits ?? 0), 0)
+  );
+
+  nearExpiryUnitsTotal = computed(() =>
+    this.products().reduce((sum, p) => sum + ((p as any).expiry?.nearExpiryUnits ?? 0), 0)
+  );
+
+  warningUnitsTotal = computed(() =>
+    this.products().reduce((sum, p) => sum + ((p as any).expiry?.warningUnits ?? 0), 0)
+  );
+
+  setExpiryFilter(value: 'All' | 'Near-Expiry' | 'Expired') {
+    this.expiryFilter.set(value);
+  }
+
+  /** Shelf-life rollup for a product, for use in the template. */
+  expiryOf(product: Product): ExpirySummary {
+    return (product as any).expiry;
+  }
+
+  async openBatchModal(product: Product) {
+    this.batchProduct.set(product);
+    this.batchRows.set([]);
+    this.isBatchModalOpen.set(true);
+    this.isLoadingBatches.set(true);
+
+    try {
+      const batches = await this.inventoryLogic.getBatchesForProduct(product.product_id);
+      const now = new Date();
+      const msPerDay = 1000 * 60 * 60 * 24;
+
+      this.batchRows.set(
+        batches
+          .filter(b => b.quantity_remaining > 0)
+          .map(b => {
+            const expiry = new Date(b.batch_expiration);
+            const days = Math.floor((expiry.getTime() - now.getTime()) / msPerDay);
+            return {
+              batch_id: b.batch_id,
+              quantity_remaining: b.quantity_remaining,
+              quantity_received: b.quantity_received,
+              expiry,
+              expiryLabel: expiry.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+              days,
+              state: days < 0 ? 'Expired' : days <= 14 ? 'Near-Expiry' : days <= 30 ? 'Warning' : 'Normal',
+            };
+          })
+      );
+    } catch (err: any) {
+      console.error('Failed to load batches', err);
+      this.errorMessage.set(err.message || 'Failed to load batches');
+    } finally {
+      this.isLoadingBatches.set(false);
+    }
+  }
+
+  closeBatchModal() {
+    this.isBatchModalOpen.set(false);
+    this.batchProduct.set(null);
+    this.batchRows.set([]);
+  }
+
   // Markdown Discount Rate State (Use Case Table 27)
   isDiscountModalOpen = signal<boolean>(false);
   isSavingDiscounts = signal<boolean>(false);
@@ -100,14 +173,20 @@ export class Inventory implements OnInit {
       this.suppliers.set(suppliersData);
 
       const map: Record<string, number> = {};
+      const now = new Date();
       const updatedData = (data as any[]).map(p => {
         const inv = p.inventory?.[0] || {};
         const stock_quantity = inv.stock_quantity ?? 0;
         const reorder_point = inv.reorder_point ?? 0;
         const needs_restock = stock_quantity <= reorder_point;
-        
+
         map[p.product_id] = stock_quantity;
-        return { ...p, stock_quantity, needs_restock };
+        return {
+          ...p,
+          stock_quantity,
+          needs_restock,
+          expiry: this.inventoryLogic.summariseExpiry(p.batches, now),
+        };
       });
       
       const uniqueCategories = Array.from(new Set(updatedData.map(p => p.category_name))).filter(Boolean).sort();
@@ -125,11 +204,19 @@ export class Inventory implements OnInit {
   }
 
   get filteredProducts(): Product[] {
-    const allProducts = this.products();
-    if (!this.searchQuery.trim()) return allProducts;
-    
-    const q = this.searchQuery.toLowerCase();
-    return allProducts.filter(p =>
+    let list = this.products();
+
+    const filter = this.expiryFilter();
+    if (filter === 'Expired') {
+      list = list.filter(p => (this.expiryOf(p)?.expiredUnits ?? 0) > 0);
+    } else if (filter === 'Near-Expiry') {
+      list = list.filter(p => (this.expiryOf(p)?.nearExpiryUnits ?? 0) > 0);
+    }
+
+    const q = this.searchQuery.trim().toLowerCase();
+    if (!q) return list;
+
+    return list.filter(p =>
       p.product_name.toLowerCase().includes(q) ||
       p.category_name.toLowerCase().includes(q) ||
       p.barcode.includes(q)

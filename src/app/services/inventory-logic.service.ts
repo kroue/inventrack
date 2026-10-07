@@ -164,13 +164,63 @@ export class InventoryLogicService {
    */
   async getActiveProducts(): Promise<import('../models/itrack.models').Product[]> {
     const supabase = this.supabaseService.client;
+    // Batches come along so the inventory screen can show shelf life. Without
+    // them expiry is invisible on the one page where stock is managed.
     const { data, error } = await supabase
       .from('products')
-      .select('*, inventory(*)')
+      .select('*, inventory(*), batches(*)')
       .neq('status', 'Out of Stock');
-      
+
     if (error) this.supabaseService.handleError(error);
     return data as any[];
+  }
+
+  /**
+   * Roll a product's open batches up into the shelf-life picture the inventory
+   * screen needs: how much is already expired, how much is about to be, and
+   * when the next batch turns.
+   */
+  summariseExpiry(batches: import('../models/itrack.models').Batches[] | undefined, now: Date = new Date()): ExpirySummary {
+    const open = (batches ?? []).filter(b => b.quantity_remaining > 0);
+
+    if (open.length === 0) {
+      return {
+        totalUnits: 0, expiredUnits: 0, nearExpiryUnits: 0, warningUnits: 0,
+        batchCount: 0, nearestExpiry: null, nearestDays: null, status: 'No batches',
+      };
+    }
+
+    const msPerDay = 1000 * 60 * 60 * 24;
+    let expiredUnits = 0, nearExpiryUnits = 0, warningUnits = 0, totalUnits = 0;
+    let nearestExpiry: Date | null = null;
+
+    for (const batch of open) {
+      const expiry = new Date(batch.batch_expiration);
+      const days = Math.floor((expiry.getTime() - now.getTime()) / msPerDay);
+
+      totalUnits += batch.quantity_remaining;
+      if (days < 0) expiredUnits += batch.quantity_remaining;
+      else if (days <= 14) nearExpiryUnits += batch.quantity_remaining;
+      else if (days <= 30) warningUnits += batch.quantity_remaining;
+
+      if (!nearestExpiry || expiry < nearestExpiry) nearestExpiry = expiry;
+    }
+
+    const nearestDays = nearestExpiry
+      ? Math.floor((nearestExpiry.getTime() - now.getTime()) / msPerDay)
+      : null;
+
+    // Report the worst state present, since that is what needs acting on.
+    const status: ExpirySummary['status'] =
+      expiredUnits > 0 ? 'Expired'
+      : nearExpiryUnits > 0 ? 'Near-Expiry'
+      : warningUnits > 0 ? 'Warning'
+      : 'Normal';
+
+    return {
+      totalUnits, expiredUnits, nearExpiryUnits, warningUnits,
+      batchCount: open.length, nearestExpiry, nearestDays, status,
+    };
   }
 
   /**
@@ -844,4 +894,20 @@ export interface StockAdjustmentResult {
   quantity: number;
   direction: 'IN' | 'OUT';
   stock_quantity: number;
+}
+
+export interface ExpirySummary {
+  /** Units across all open batches. */
+  totalUnits: number;
+  /** Units already past their expiration date — unsellable, needing write-off. */
+  expiredUnits: number;
+  /** Units with 0-14 days left, sold at the markdown. */
+  nearExpiryUnits: number;
+  /** Units with 15-30 days left. */
+  warningUnits: number;
+  batchCount: number;
+  nearestExpiry: Date | null;
+  /** Days until the nearest expiry; negative when that batch has already passed. */
+  nearestDays: number | null;
+  status: 'Expired' | 'Near-Expiry' | 'Warning' | 'Normal' | 'No batches';
 }
