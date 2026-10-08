@@ -14,6 +14,34 @@ interface SaleLine {
   mixedPricing: boolean;
 }
 
+type RangePreset = 'all' | 'today' | '7d' | '30d' | 'month' | 'custom';
+
+/** Local calendar day as `YYYY-MM-DD`; toISOString() would shift the date. */
+export function toDateInput(d: Date): string {
+  const month = `${d.getMonth() + 1}`.padStart(2, '0');
+  const day = `${d.getDate()}`.padStart(2, '0');
+  return `${d.getFullYear()}-${month}-${day}`;
+}
+
+/**
+ * Turns two `YYYY-MM-DD` box values into an inclusive timestamp range.
+ * Either side may be '' for an open end. Exported so the day-boundary
+ * handling can be tested on its own.
+ */
+export function resolveRange(fromValue: string, toValue: string): { start: number | null; end: number | null } {
+  // Lexicographic order on YYYY-MM-DD is chronological order, so an inverted
+  // range can be straightened out before it becomes a timestamp.
+  let [from, to] = [fromValue, toValue];
+  if (from && to && from > to) [from, to] = [to, from];
+
+  // Parsing a bare YYYY-MM-DD gives UTC midnight, which lands on the wrong
+  // day west of Greenwich. Adding a time keeps it local.
+  return {
+    start: from ? new Date(`${from}T00:00:00`).getTime() : null,
+    end: to ? new Date(`${to}T23:59:59.999`).getTime() : null,
+  };
+}
+
 interface TransactionRow {
   id: string;
   code: string;
@@ -51,17 +79,59 @@ export class SalesHistory implements OnInit {
   isSaleModalOpen = signal<boolean>(false);
   selectedSale = signal<TransactionRow | null>(null);
 
-  filteredSales = computed(() => {
-    const q = this.searchQuery().toLowerCase().trim();
-    if (!q) return this.salesHistory();
+  // ─── Date range ──────────────────────────────────────────────────────────
 
-    return this.salesHistory().filter(s =>
-      s.cashier.toLowerCase().includes(q) ||
-      s.code.toLowerCase().includes(q) ||
-      s.date.toLowerCase().includes(q) ||
-      s.paymentMethod.toLowerCase().includes(q) ||
-      s.lines.some(l => l.product.toLowerCase().includes(q))
-    );
+  /** `YYYY-MM-DD` as produced by <input type="date">; '' means open-ended. */
+  fromDate = signal<string>('');
+  toDate = signal<string>('');
+  activePreset = signal<RangePreset>('all');
+
+  hasDateFilter = computed(() => !!this.fromDate() || !!this.toDate());
+
+  readonly presets: { key: RangePreset; label: string }[] = [
+    { key: 'all', label: 'All time' },
+    { key: 'today', label: 'Today' },
+    { key: '7d', label: 'Last 7 days' },
+    { key: '30d', label: 'Last 30 days' },
+    { key: 'month', label: 'This month' },
+  ];
+
+  /** The chosen range as timestamps, inclusive of both end days. */
+  private range = computed(() => resolveRange(this.fromDate(), this.toDate()));
+
+  /** Reads as the footer caption, e.g. "Oct 1 – Oct 8, 2026". */
+  rangeLabel = computed(() => {
+    const { start, end } = this.range();
+    const fmt = (t: number) => new Date(t).toLocaleDateString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+    });
+
+    if (start === null && end === null) return 'all time';
+    if (start !== null && end !== null) {
+      // Compare the rendered days, not the timestamps: a one-day range spans
+      // 00:00:00 to 23:59:59, so the two ends are never equal.
+      const [first, last] = [fmt(start), fmt(end)];
+      return first === last ? first : `${first} – ${last}`;
+    }
+    return start !== null ? `from ${fmt(start)}` : `up to ${fmt(end!)}`;
+  });
+
+  filteredSales = computed(() => {
+    const { start, end } = this.range();
+    const q = this.searchQuery().toLowerCase().trim();
+
+    return this.salesHistory().filter(s => {
+      const at = s.dateObj.getTime();
+      if (start !== null && at < start) return false;
+      if (end !== null && at > end) return false;
+      if (!q) return true;
+
+      return s.cashier.toLowerCase().includes(q) ||
+        s.code.toLowerCase().includes(q) ||
+        s.date.toLowerCase().includes(q) ||
+        s.paymentMethod.toLowerCase().includes(q) ||
+        s.lines.some(l => l.product.toLowerCase().includes(q));
+    });
   });
 
   // ─── Summary, shown at the foot of the list ──────────────────────────────
@@ -221,6 +291,42 @@ export class SalesHistory implements OnInit {
     } finally {
       this.isLoading.set(false);
     }
+  }
+
+  applyPreset(preset: RangePreset) {
+    if (preset === 'all') {
+      this.fromDate.set('');
+      this.toDate.set('');
+      this.activePreset.set('all');
+      return;
+    }
+
+    const now = new Date();
+    const from = new Date(now);
+
+    if (preset === '7d') from.setDate(from.getDate() - 6);
+    else if (preset === '30d') from.setDate(from.getDate() - 29);
+    else if (preset === 'month') from.setDate(1);
+    // 'today' leaves `from` on today.
+
+    this.fromDate.set(toDateInput(from));
+    this.toDate.set(toDateInput(now));
+    this.activePreset.set(preset);
+  }
+
+  /** Typing in either date box means the range is no longer a preset. */
+  setFromDate(value: string) {
+    this.fromDate.set(value);
+    this.activePreset.set(value || this.toDate() ? 'custom' : 'all');
+  }
+
+  setToDate(value: string) {
+    this.toDate.set(value);
+    this.activePreset.set(value || this.fromDate() ? 'custom' : 'all');
+  }
+
+  clearDateFilter() {
+    this.applyPreset('all');
   }
 
   toggleExpanded(id: string) {

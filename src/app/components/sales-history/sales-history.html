@@ -25,6 +25,36 @@
       </div>
     </div>
 
+    <!-- Date range. Everything below, totals included, follows this. -->
+    <div class="flex flex-col lg:flex-row lg:items-center gap-3 mb-6 pb-6 border-b border-gray-200">
+      <div class="flex items-center gap-1.5 flex-wrap">
+        @for (preset of presets; track preset.key) {
+          <button (click)="applyPreset(preset.key)"
+            class="text-[11px] font-semibold px-3 py-1.5 rounded-lg border shadow-sm transition-colors btn-press"
+            [ngClass]="activePreset() === preset.key
+              ? 'bg-[#F0EBFA] text-[#6D28D9] border-[#DDD1F5]'
+              : 'bg-white text-gray-600 border-gray-200 hover:text-gray-900'">
+            {{ preset.label }}
+          </button>
+        }
+      </div>
+
+      <div class="flex items-center gap-2 lg:ml-auto">
+        <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+        <input type="date" aria-label="From date" [ngModel]="fromDate()" (ngModelChange)="setFromDate($event)"
+          class="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#7C3AED] shadow-sm">
+        <span class="text-[11px] text-gray-400 font-semibold">to</span>
+        <input type="date" aria-label="To date" [ngModel]="toDate()" (ngModelChange)="setToDate($event)"
+          class="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-700 font-medium focus:outline-none focus:ring-2 focus:ring-[#7C3AED] shadow-sm">
+        @if (hasDateFilter()) {
+          <button (click)="clearDateFilter()" title="Clear the date range"
+            class="text-[11px] font-semibold text-gray-500 hover:text-red-600 px-2 py-1.5 rounded-lg transition-colors btn-press">
+            Clear
+          </button>
+        }
+      </div>
+    </div>
+
     @if (isLoading()) {
       <div class="flex flex-col items-center justify-center py-20">
         <svg class="animate-spin h-8 w-8 text-gray-400 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -143,9 +173,16 @@
         @if (filteredSales().length === 0) {
           <div class="py-16 text-center text-gray-400 flex flex-col items-center">
             <svg class="w-12 h-12 mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
-            <p class="text-sm font-medium">No sales transactions found.</p>
-            @if (searchQuery()) {
-              <p class="text-xs mt-1">Try adjusting your search criteria.</p>
+            @if (hasDateFilter()) {
+              <p class="text-sm font-medium">No sales for {{ rangeLabel() }}.</p>
+              <button (click)="clearDateFilter()" class="text-xs mt-2 font-semibold text-[#6D28D9] hover:underline">
+                Show all time
+              </button>
+            } @else {
+              <p class="text-sm font-medium">No sales transactions found.</p>
+              @if (searchQuery()) {
+                <p class="text-xs mt-1">Try adjusting your search criteria.</p>
+              }
             }
           </div>
         }
@@ -180,9 +217,10 @@
             <div class="text-right">
               <p class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Total Sales</p>
               <p class="text-3xl font-bold text-gray-900 tabular-nums leading-tight">₱{{ netSales() | number:'1.2-2' }}</p>
-              @if (searchQuery()) {
-                <p class="text-[10px] text-gray-400 mt-0.5">for the current search</p>
-              }
+              <!-- Say what the figure covers, so it is never read as the all-time total. -->
+              <p class="text-[10px] mt-0.5" [ngClass]="hasDateFilter() ? 'text-[#6D28D9] font-semibold' : 'text-gray-400'">
+                {{ rangeLabel() }}@if (searchQuery()) { <span class="text-gray-400 font-normal">· matching "{{ searchQuery() }}"</span> }
+              </p>
             </div>
           </div>
         </div>
