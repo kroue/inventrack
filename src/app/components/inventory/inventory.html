@@ -129,7 +129,7 @@
             </div>
 
             @if (expiryOf(product); as exp) {
-              @if (exp.status !== 'Normal' && exp.status !== 'No batches') {
+              @if (exp.status !== 'No batches' && exp.nearestExpiry) {
                 <button (click)="openBatchModal(product); $event.stopPropagation()"
                   class="mt-2 self-start flex items-center gap-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-colors"
                   [ngClass]="{
@@ -139,11 +139,11 @@
                   }"
                   [title]="exp.batchCount + ' batch(es) — click for details'">
                   @if (exp.status === 'Expired') {
-                    {{ exp.expiredUnits }} expired
+                    Expired · {{ exp.nearestExpiry | date:'MMM d, y' }}
                   } @else if (exp.status === 'Near-Expiry') {
-                    {{ exp.nearExpiryUnits }} expiring in {{ exp.nearestDays }}d
+                    Expires {{ exp.nearestExpiry | date:'MMM d, y' }}
                   } @else {
-                    Expires in {{ exp.nearestDays }}d
+                    Expires {{ exp.nearestExpiry | date:'MMM d, y' }}
                   }
                 </button>
               }
@@ -245,11 +245,11 @@
                       'bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100': exp.status === 'Warning'
                     }">
                     @if (exp.status === 'Expired') {
-                      {{ exp.expiredUnits }} expired
+                      Expired · {{ exp.nearestExpiry | date:'MMM d, y' }}
                     } @else if (exp.status === 'Near-Expiry') {
-                      {{ exp.nearExpiryUnits }} expiring in {{ exp.nearestDays }}d
+                      Expires {{ exp.nearestExpiry | date:'MMM d, y' }}
                     } @else {
-                      Expires in {{ exp.nearestDays }}d
+                      Expires {{ exp.nearestExpiry | date:'MMM d, y' }}
                     }
                   </button>
                 }

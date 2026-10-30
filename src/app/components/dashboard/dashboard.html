@@ -1,5 +1,46 @@
 <div class="p-8 h-full w-full overflow-y-auto bg-white custom-scrollbar page-enter">
 
+  @if (alertNotifications().length) {
+    <div class="fixed inset-0 z-50 flex items-start justify-end pointer-events-none p-6">
+      <div class="pointer-events-auto w-full max-w-md space-y-3 animate-fade-in-up">
+        @for (notification of alertNotifications(); track notification.id) {
+          <div class="rounded-2xl border shadow-lg backdrop-blur-sm p-4 bg-white/95"
+               [ngClass]="{
+                 'border-red-200': notification.level === 'critical',
+                 'border-amber-200': notification.level === 'warning',
+                 'border-sky-200': notification.level === 'info'
+               }">
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-start gap-3">
+                <div class="mt-0.5 rounded-full p-1.5"
+                     [ngClass]="{
+                       'bg-red-100 text-red-700': notification.level === 'critical',
+                       'bg-amber-100 text-amber-700': notification.level === 'warning',
+                       'bg-sky-100 text-sky-700': notification.level === 'info'
+                     }">
+                  @if (notification.level === 'critical') {
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  } @else if (notification.level === 'warning') {
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 3h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
+                  } @else {
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  }
+                </div>
+                <div>
+                  <p class="text-sm font-semibold text-gray-900">{{ notification.title }}</p>
+                  <p class="text-xs text-gray-600 mt-1">{{ notification.message }}</p>
+                </div>
+              </div>
+              <button type="button" (click)="dismissAlertNotification(notification.id)" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
   <!-- Top Metrics Row -->
   <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
 
@@ -204,6 +245,13 @@
           Product Movement
         </button>
       </div>
+      <button (click)="openReportModal()"
+        class="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold rounded-full bg-gray-900 text-white hover:bg-black shadow-sm transition-colors">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-6m3 6V7M5 21h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" />
+        </svg>
+        Sales &amp; Analytics Report
+      </button>
     </div>
 
     @if (analyticsTab() === 'Forecast') {
@@ -238,25 +286,26 @@
                    [ngClass]="row.soq > 0 ? 'text-amber-600' : 'text-gray-300'">{{ row.soq }}</div>
               <div class="col-span-2 text-center">
                 <span class="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-semibold border"
-                  [ngClass]="row.isLowStock ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'">
+                  [ngClass]="row.isOutOfStock
+                    ? 'bg-red-50 text-red-700 border-red-200'
+                    : row.isLowStock
+                      ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                      : 'bg-green-50 text-green-700 border-green-200'">
                   {{ row.status }}
                 </span>
               </div>
               <div class="col-span-1 text-center">
-                @if (row.nearestBatchRisk === 'Expired') {
-                  <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-600 text-white border border-red-700"
-                    [title]="'Expired ' + (-(row.daysToExpiry ?? 0)) + ' day(s) ago — cannot be sold, write it off in Inventory'">
-                    Expired
-                  </span>
-                } @else if (row.nearestBatchRisk === 'High') {
-                  <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 text-red-700 border border-red-200"
-                    [title]="'Near expiry — ' + row.daysToExpiry + ' day(s) left, ' + (row.discountRate * 100) + '% markdown applied'">
-                    Near-Expiry
-                  </span>
-                } @else if (row.nearestBatchRisk === 'Medium') {
-                  <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-100 text-yellow-800 border border-yellow-200"
-                    [title]="'Warning — ' + row.daysToExpiry + ' day(s) left'">
-                    Warning
+                @if (row.nearestExpiryDate) {
+                  <span class="text-[10px] font-medium"
+                    [ngClass]="row.nearestBatchRisk === 'Expired'
+                      ? 'text-red-600'
+                      : row.nearestBatchRisk === 'High'
+                        ? 'text-amber-600'
+                        : row.nearestBatchRisk === 'Medium'
+                          ? 'text-yellow-700'
+                          : 'text-gray-500'"
+                    [title]="row.nearestBatchRisk + ' — ' + (row.daysToExpiry ?? 0) + ' day(s) relative to today'">
+                    {{ row.nearestExpiryDate | date:'MMM d, y' }}
                   </span>
                 } @else {
                   <span class="text-[10px] text-gray-400">&mdash;</span>
@@ -384,6 +433,103 @@
     </div>
   </div>
 </div>
+
+<!-- Modal: Sales and Analytics Report -->
+@if (isReportModalOpen()) {
+  <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-fade-in">
+    <div class="bg-white rounded-[24px] shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden animate-scale-in">
+      <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+        <div>
+          <h3 class="text-lg font-semibold text-gray-900">Sales and Analytics Report</h3>
+          <p class="text-xs text-gray-500 mt-1">Al-Bazar Enterprises · Generated {{ todayDate() }}</p>
+        </div>
+        <button (click)="closeReportModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <div class="p-6 overflow-y-auto custom-scrollbar">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+          <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <p class="text-[10px] uppercase tracking-wide text-gray-500">Total Revenue</p>
+            <p class="text-lg font-bold text-gray-900 mt-1">₱{{ totalRevenue() | number:'1.2-2' }}</p>
+          </div>
+          <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <p class="text-[10px] uppercase tracking-wide text-gray-500">Products</p>
+            <p class="text-lg font-bold text-gray-900 mt-1">{{ totalProducts() }}</p>
+          </div>
+          <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <p class="text-[10px] uppercase tracking-wide text-gray-500">In Stock</p>
+            <p class="text-lg font-bold text-green-700 mt-1">{{ inStockCount() }}</p>
+          </div>
+          <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <p class="text-[10px] uppercase tracking-wide text-gray-500">Low Stock</p>
+            <p class="text-lg font-bold text-yellow-700 mt-1">{{ lowStockCount() }}</p>
+          </div>
+          <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <p class="text-[10px] uppercase tracking-wide text-gray-500">Out of Stock</p>
+            <p class="text-lg font-bold text-red-700 mt-1">{{ outOfStockCount() }}</p>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h4 class="text-sm font-semibold text-gray-900">
+              @if (analyticsTab() === 'Movement') { Product Movement Analysis } @else { Demand Forecast Analysis }
+            </h4>
+            <p class="text-xs text-gray-500 mt-1">
+              @if (analyticsTab() === 'Movement') { Ranked by units sold over the last 30 days. }
+              @else { Uses EMA velocity, supplier lead time, safety stock, and reorder point. }
+            </p>
+          </div>
+          <span class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">{{ chartTimeframe() }} sales view</span>
+        </div>
+
+        @if (analyticsTab() === 'Movement') {
+          <div class="overflow-x-auto border border-gray-200 rounded-xl">
+            <table class="w-full text-xs">
+              <thead class="bg-gray-50 text-[10px] uppercase tracking-wide text-gray-500">
+                <tr><th class="text-left px-3 py-2">Rank</th><th class="text-left px-3 py-2">Product</th><th class="text-right px-3 py-2">Units Sold</th><th class="text-right px-3 py-2">Daily Avg</th><th class="text-right px-3 py-2">Revenue</th><th class="text-left px-3 py-2">Movement</th></tr>
+              </thead>
+              <tbody>
+                @for (row of filteredMovement(); track row.productId) {
+                  <tr class="border-t border-gray-100">
+                    <td class="px-3 py-2">{{ row.rank }}</td><td class="px-3 py-2 font-medium">{{ row.name }}</td>
+                    <td class="px-3 py-2 text-right">{{ row.unitsSold }}</td><td class="px-3 py-2 text-right">{{ row.dailyAverage }}</td>
+                    <td class="px-3 py-2 text-right">₱{{ row.revenue | number:'1.2-2' }}</td><td class="px-3 py-2">{{ row.movement }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <div class="overflow-x-auto border border-gray-200 rounded-xl">
+            <table class="w-full text-xs">
+              <thead class="bg-gray-50 text-[10px] uppercase tracking-wide text-gray-500">
+                <tr><th class="text-left px-3 py-2">Product</th><th class="text-right px-3 py-2">Stock</th><th class="text-right px-3 py-2">Velocity</th><th class="text-right px-3 py-2">ROP</th><th class="text-right px-3 py-2">Suggested Order</th><th class="text-left px-3 py-2">Status</th><th class="text-left px-3 py-2">Expiry Date</th></tr>
+              </thead>
+              <tbody>
+                @for (row of predictiveAnalytics(); track row.productId) {
+                  <tr class="border-t border-gray-100">
+                    <td class="px-3 py-2 font-medium">{{ row.name }}</td><td class="px-3 py-2 text-right">{{ row.currentStock }}</td>
+                    <td class="px-3 py-2 text-right">{{ row.dailyVelocity }}/day</td><td class="px-3 py-2 text-right">{{ row.rop }}</td>
+                    <td class="px-3 py-2 text-right">{{ row.soq }}</td><td class="px-3 py-2">{{ row.status }}</td>
+                    <td class="px-3 py-2">{{ row.nearestExpiryDate ? (row.nearestExpiryDate | date:'MMM d, y') : 'No batch date' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+
+      <div class="px-6 py-4 bg-gray-50/50 border-t border-gray-100 flex justify-end gap-2">
+        <button (click)="exportReportCsv()" class="px-4 py-2 text-xs font-semibold border border-gray-300 rounded-full text-gray-700 hover:bg-white">Export CSV</button>
+        <button (click)="printReport()" class="px-4 py-2 text-xs font-semibold bg-gray-900 text-white rounded-full hover:bg-black">Print / Save PDF</button>
+      </div>
+    </div>
+  </div>
+}
 
 <!-- Modal: Sale Details -->
 @if (isSaleModalOpen()) {

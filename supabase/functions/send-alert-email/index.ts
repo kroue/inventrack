@@ -35,36 +35,44 @@ function buildEmail(alert: AlertPayload): { subject: string; html: string } {
 
   if (alert.alert_type === 'NEAR EXPIRY') {
     return {
-      subject: `InvenTrack: ${alert.product_name} is near expiry`,
+      subject: `Action Required: ${alert.product_name} - Expiry Alert`,
       html: `
-        <h2 style="font-family:sans-serif;color:#b45309;margin:0 0 12px">Near-Expiry Stock</h2>
-        <p style="font-family:sans-serif;color:#374151;line-height:1.6">
-          <strong>${alert.product_name}</strong> is holding stock with 14 days or less of
-          shelf life remaining. The markdown discount is now being applied automatically
-          at checkout under the FEFO policy.
+        <h2 style="font-family:sans-serif;color:#b45309;margin:0 0 12px">Expiry Alert</h2>
+        <p style="font-family:sans-serif;color:#374151;line-height:1.7;margin:0 0 12px">
+          This is to inform the warehouse team that <strong>${alert.product_name}</strong> has
+          stock with 14 days or less remaining before expiry. Please review the batch dates,
+          remove any unsellable stock, and apply the appropriate markdown or write-off action
+          immediately to prevent losses.
         </p>
-        <p style="font-family:sans-serif;color:#6b7280;font-size:12px">
-          On hand: ${alert.stock_quantity} &middot; Detected ${triggered}
+        <table style="font-family:sans-serif;color:#374151;font-size:14px;border-collapse:collapse;margin-bottom:12px">
+          <tr><td style="padding:4px 16px 4px 0">Current on hand</td><td><strong>${alert.stock_quantity}</strong></td></tr>
+          <tr><td style="padding:4px 16px 4px 0">Alert triggered</td><td>${triggered}</td></tr>
+        </table>
+        <p style="font-family:sans-serif;color:#374151;line-height:1.6;margin:0">
+          <strong>Admin action:</strong> verify the affected batch, isolate the remaining stock,
+          and coordinate disposal, discounting, or replacement according to policy.
         </p>
       `,
     };
   }
 
   return {
-    subject: `InvenTrack: ${alert.product_name} has hit its reorder point`,
+    subject: `Action Required: ${alert.product_name} - Low Stock Alert`,
     html: `
       <h2 style="font-family:sans-serif;color:#b91c1c;margin:0 0 12px">Low Stock Alert</h2>
-      <p style="font-family:sans-serif;color:#374151;line-height:1.6">
-        <strong>${alert.product_name}</strong> has fallen to or below its calculated
-        Reorder Point. Restocking now accounts for the supplier lead time.
+      <p style="font-family:sans-serif;color:#374151;line-height:1.7;margin:0 0 12px">
+        This message serves as a formal notice that <strong>${alert.product_name}</strong>
+        has reached or fallen below its reorder point. The current inventory level requires
+        immediate review and replenishment action to avoid service disruption.
       </p>
-      <table style="font-family:sans-serif;color:#374151;font-size:14px;border-collapse:collapse">
+      <table style="font-family:sans-serif;color:#374151;font-size:14px;border-collapse:collapse;margin-bottom:12px">
         <tr><td style="padding:4px 16px 4px 0">Current stock</td><td><strong>${alert.stock_quantity}</strong></td></tr>
         <tr><td style="padding:4px 16px 4px 0">Reorder point</td><td><strong>${alert.reorder_point}</strong></td></tr>
-        <tr><td style="padding:4px 16px 4px 0">Detected</td><td>${triggered}</td></tr>
+        <tr><td style="padding:4px 16px 4px 0">Alert triggered</td><td>${triggered}</td></tr>
       </table>
-      <p style="font-family:sans-serif;color:#6b7280;font-size:12px;margin-top:16px">
-        A restock request has been queued in the Procurement dashboard.
+      <p style="font-family:sans-serif;color:#374151;line-height:1.6;margin:0">
+        <strong>Admin action:</strong> open the Procurement dashboard, verify lead time,
+        and submit or approve the restock order for the affected product.
       </p>
     `,
   };

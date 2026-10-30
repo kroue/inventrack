@@ -36,6 +36,7 @@ export class Dashboard implements OnInit {
   chartYLabels = signal<string[]>(['₱40K', '₱30K', '₱20K', '₱10K', '0']);
   quickStats = signal<any[]>([]);
   salesHistory = signal<any[]>([]);
+  alertNotifications = signal<{ id: string; level: 'critical' | 'warning' | 'info'; title: string; message: string }[]>([]);
 
   // Sale History Modal State
   isSaleModalOpen = signal<boolean>(false);
@@ -66,6 +67,7 @@ export class Dashboard implements OnInit {
   chartTimeframe = signal<'Weekly' | 'Monthly'>('Weekly');
   showTimeframeMenu = signal<boolean>(false);
   showOptionsMenu = signal<boolean>(false);
+  isReportModalOpen = signal<boolean>(false);
   rawSalesData: any[] = [];
 
   toggleTimeframeMenu() {
@@ -92,6 +94,53 @@ export class Dashboard implements OnInit {
     this.movementFilter.set(filter);
   }
 
+  openReportModal() {
+    this.isReportModalOpen.set(true);
+  }
+
+  closeReportModal() {
+    this.isReportModalOpen.set(false);
+  }
+
+  dismissAlertNotification(id: string) {
+    this.alertNotifications.set(this.alertNotifications().filter(item => item.id !== id));
+  }
+
+  private buildAlertNotifications(analyticsData: any[]) {
+    const notifications: { id: string; level: 'critical' | 'warning' | 'info'; title: string; message: string }[] = [];
+
+    analyticsData.forEach(product => {
+      const productLabel = product.name || 'Product';
+
+      if (product.currentStock <= 0) {
+        notifications.push({
+          id: `out-of-stock-${product.productId}`,
+          level: 'critical',
+          title: 'Out of Stock',
+          message: `${productLabel} has zero units on hand and cannot be sold until it is replenished.`
+        });
+      } else if (product.isLowStock) {
+        notifications.push({
+          id: `low-stock-${product.productId}`,
+          level: 'warning',
+          title: 'Reached Reorder Point',
+          message: `${productLabel} has fallen to ${product.currentStock} units, which is at or below the reorder point of ${product.rop}. Please place a restock order.`
+        });
+      }
+
+      if (product.nearestBatchRisk === 'High' || product.nearestBatchRisk === 'Expired') {
+        notifications.push({
+          id: `expiry-${product.productId}`,
+          level: 'info',
+          title: 'Expiry Risk',
+          message: `${productLabel} has stock nearing or past expiry. Review the batch dates and remove or discount the affected stock.`
+        });
+      }
+    });
+
+    return notifications.slice(0, 5);
+  }
+
   /**
    * Use Case Table 25 — export the analytics report the Admin is looking at.
    */
@@ -108,17 +157,18 @@ export class Dashboard implements OnInit {
     let filename: string;
 
     if (this.analyticsTab() === 'Movement') {
-      filename = 'inventrack-product-movement';
+      filename = 'inventrack-sales-and-analytics-movement';
       headers = ['Rank', 'Product', 'Category', 'Units Sold (30d)', 'Daily Average', 'Revenue', 'Movement'];
       rows = this.filteredMovement().map(r => [
         r.rank, r.name, r.category, r.unitsSold, r.dailyAverage, r.revenue.toFixed(2), r.movement
       ]);
     } else {
-      filename = 'inventrack-demand-forecast';
-      headers = ['Product', 'Category', 'Stock (Q)', 'Velocity (V)', 'Lead Time (L)', 'Safety Stock (ss)', 'ROP', 'SOQ', 'Status', 'Expiry Risk'];
+      filename = 'inventrack-sales-and-analytics-forecast';
+      headers = ['Product', 'Category', 'Stock (Q)', 'Velocity (V)', 'Lead Time (L)', 'Safety Stock (ss)', 'ROP', 'SOQ', 'Status', 'Expiry Risk', 'Expiry Date'];
       rows = this.predictiveAnalytics().map(a => [
         a.name, a.category, a.currentStock, a.dailyVelocity, a.leadTime,
-        a.safetyStock, a.rop, a.soq, a.status, a.nearestBatchRisk
+        a.safetyStock, a.rop, a.soq, a.status, a.nearestBatchRisk,
+        a.nearestExpiryDate ? new Date(a.nearestExpiryDate).toLocaleDateString('en-PH') : 'No batch date'
       ]);
     }
 
@@ -142,6 +192,7 @@ export class Dashboard implements OnInit {
    */
   printReport() {
     this.showOptionsMenu.set(false);
+    this.closeReportModal();
 
     const escapeHtml = (value: any) =>
       String(value ?? '').replace(/[&<>"']/g, ch => (
@@ -149,17 +200,24 @@ export class Dashboard implements OnInit {
       ));
 
     const isMovement = this.analyticsTab() === 'Movement';
-    const title = isMovement ? 'Product Movement Report' : 'Demand Forecast Report';
+    const title = 'Sales and Analytics Report';
+    const sectionTitle = isMovement ? 'Product Movement Analysis' : 'Demand Forecast Analysis';
+    const generatedAt = new Date().toLocaleString('en-PH');
+    const totalUnitsSold = this.movementRanking().reduce((sum, row) => sum + row.unitsSold, 0);
+    const lowStock = this.predictiveAnalytics().filter(row => row.isLowStock).length;
+    const outOfStock = this.predictiveAnalytics().filter(row => row.isOutOfStock).length;
+    const salesPeriod = this.chartTimeframe() === 'Weekly' ? 'Last 7 days' : 'Last 28 days';
 
     const headers = isMovement
       ? ['Rank', 'Product', 'Category', 'Units Sold (30d)', 'Daily Avg', 'Revenue', 'Movement']
-      : ['Product', 'Category', 'Stock (Q)', 'Velocity (V)', 'Lead Time (L)', 'Safety Stock', 'ROP', 'SOQ', 'Status'];
+      : ['Product', 'Category', 'Stock (Q)', 'Velocity (V)', 'Lead Time (L)', 'Safety Stock', 'ROP', 'SOQ', 'Status', 'Expiry Date'];
 
     const bodyRows = isMovement
       ? this.filteredMovement().map(r =>
           [r.rank, r.name, r.category, r.unitsSold, r.dailyAverage, `P ${r.revenue.toFixed(2)}`, r.movement])
       : this.predictiveAnalytics().map(a =>
-          [a.name, a.category, a.currentStock, a.dailyVelocity, a.leadTime, a.safetyStock, a.rop, a.soq, a.status]);
+          [a.name, a.category, a.currentStock, a.dailyVelocity, a.leadTime, a.safetyStock, a.rop, a.soq,
+            a.status, a.nearestExpiryDate ? new Date(a.nearestExpiryDate).toLocaleDateString('en-PH') : 'No batch date']);
 
     const html = `
       <!DOCTYPE html>
@@ -170,8 +228,13 @@ export class Dashboard implements OnInit {
           <style>
             @page { size: A4 landscape; margin: 12mm; }
             body { font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 11px; }
-            h1 { font-size: 18px; margin: 0 0 2px; }
-            .sub { color: #666; font-size: 11px; margin-bottom: 14px; }
+            h1 { font-size: 21px; margin: 0 0 3px; }
+            h2 { font-size: 14px; margin: 20px 0 8px; }
+            .sub { color: #666; font-size: 11px; margin-bottom: 14px; line-height: 1.5; }
+            .summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 14px 0 18px; }
+            .metric { border: 1px solid #d1d5db; border-radius: 5px; padding: 8px; }
+            .metric-label { color: #6b7280; font-size: 9px; text-transform: uppercase; }
+            .metric-value { font-size: 15px; font-weight: bold; margin-top: 3px; }
             table { width: 100%; border-collapse: collapse; }
             th { background: #f3f4f6; text-align: left; font-size: 10px; text-transform: uppercase;
                  letter-spacing: .04em; padding: 6px; border-bottom: 2px solid #d1d5db; }
@@ -183,9 +246,18 @@ export class Dashboard implements OnInit {
         <body>
           <h1>InvenTrack — ${title}</h1>
           <div class="sub">
-            Al-Bazar Enterprises &middot; Generated ${new Date().toLocaleString()}<br>
-            Velocity computed by Exponential Moving Average over a 30-day window (&alpha; = 2/(n+1)).
+            Al-Bazar Enterprises &middot; Generated ${escapeHtml(generatedAt)}<br>
+            Reporting period: ${salesPeriod} &middot; Analytics view: ${escapeHtml(isMovement ? 'Product Movement' : 'Demand Forecast')}<br>
+            Forecast velocity uses a 30-day Exponential Moving Average; reorder point uses ROP = (V &times; L) + ss.
           </div>
+          <div class="summary">
+            <div class="metric"><div class="metric-label">Total Revenue</div><div class="metric-value">₱ ${this.totalRevenue().toLocaleString('en-PH', { minimumFractionDigits: 2 })}</div></div>
+            <div class="metric"><div class="metric-label">Units Sold (30d)</div><div class="metric-value">${totalUnitsSold.toLocaleString()}</div></div>
+            <div class="metric"><div class="metric-label">Products</div><div class="metric-value">${this.totalProducts()}</div></div>
+            <div class="metric"><div class="metric-label">Low Stock</div><div class="metric-value">${lowStock}</div></div>
+            <div class="metric"><div class="metric-label">Out of Stock</div><div class="metric-value">${outOfStock}</div></div>
+          </div>
+          <h2>${sectionTitle}</h2>
           <table>
             <thead><tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>
             <tbody>
@@ -194,7 +266,7 @@ export class Dashboard implements OnInit {
               ).join('')}
             </tbody>
           </table>
-          <div class="footer">Generated by the InvenTrack Predictive Analytics Engine.</div>
+          <div class="footer">Prepared by InvenTrack for administrative inventory and sales review. This report is generated from the current dashboard data.</div>
         </body>
       </html>
     `;
@@ -324,11 +396,12 @@ export class Dashboard implements OnInit {
       ]);
       this.predictiveAnalytics.set(analyticsData);
       this.movementRanking.set(ranking);
+      this.alertNotifications.set(this.buildAlertNotifications(analyticsData));
 
       // Compute status totals from predictive engine
       const total = analyticsData.length;
-      const lowCount = analyticsData.filter(a => a.isLowStock).length;
-      const inCount = analyticsData.filter(a => !a.isLowStock && a.currentStock > 0).length;
+      const lowCount = analyticsData.filter(a => a.currentStock > 0 && a.isLowStock).length;
+      const inCount = analyticsData.filter(a => a.currentStock > 0 && !a.isLowStock).length;
       const outCount = analyticsData.filter(a => a.currentStock <= 0).length;
 
       this.totalProducts.set(total);

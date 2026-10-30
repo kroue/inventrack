@@ -111,7 +111,9 @@ export class InventoryLogicService {
    */
   calculateROPAndTrigger(salesVelocity: number, leadTimeDays: number, safetyStock: number, currentStockQuantity: number): { rop: number, isLowStockAlert: boolean } {
     const rop = Math.ceil((salesVelocity * leadTimeDays) + safetyStock);
-    const isLowStockAlert = currentStockQuantity <= rop;
+    // Zero stock is treated as Out of Stock, not Low Stock. This keeps the
+    // dashboard and alerting logic aligned with the warehouse procedure.
+    const isLowStockAlert = currentStockQuantity > 0 && currentStockQuantity <= rop;
     return { rop, isLowStockAlert };
   }
 
@@ -772,7 +774,8 @@ export class InventoryLogicService {
         safetyStock,
         currentStock
       );
-      const alertStatus = isLowStock ? 'Low Stock Alert' : 'Optimal';
+      const isOutOfStock = currentStock <= 0;
+      const alertStatus = isOutOfStock ? 'Out of Stock' : isLowStock ? 'Low Stock Alert' : 'Optimal';
 
       // 4. Suggested Order Quantity O_i = (V_i * P) - Q_i
       const soq = this.calculateSuggestedOrderQuantity(
@@ -785,6 +788,7 @@ export class InventoryLogicService {
       let nearestBatchRisk = 'Low';
       let discountApplied = 0;
       let daysToExpiry: number | null = null;
+      let nearestExpiryDate: string | null = null;
       const openBatches = (prod.batches || []).filter((b: any) => b.quantity_remaining > 0);
       if (openBatches.length > 0) {
         const sortedBatches = [...openBatches].sort((a: any, b: any) =>
@@ -800,6 +804,7 @@ export class InventoryLogicService {
         nearestBatchRisk = evalResult.riskLevel;
         discountApplied = evalResult.discountApplied;
         daysToExpiry = Math.floor((nearestExpiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+        nearestExpiryDate = nearestExpiry.toISOString();
       }
 
       summaryList.push({
@@ -814,12 +819,14 @@ export class InventoryLogicService {
         rop,
         status: alertStatus,
         isLowStock,
+        isOutOfStock,
         soq,
         price: prod.price,
         discountRate: prod.discount_rate ?? 0,
         nearestBatchRisk,
         discountApplied,
-        daysToExpiry
+        daysToExpiry,
+        nearestExpiryDate
       });
     }
 
