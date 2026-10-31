@@ -34,6 +34,7 @@ export class StockLog implements OnInit {
 
   /** Selected period as 'YYYY-MM', or 'all' for the whole history. */
   selectedMonth = signal<string>('all');
+  showMissingOnly = signal<boolean>(false);
 
   /**
    * Months that actually have entries, newest first. Built from the data rather
@@ -56,14 +57,16 @@ export class StockLog implements OnInit {
 
   filteredLogs = computed(() => {
     const month = this.selectedMonth();
-    if (month === 'all') return this.stockLogs();
-
     return this.stockLogs().filter(log => {
+      if (this.showMissingOnly() && !log.isMissingStock) return false;
+      if (month === 'all') return true;
       const d: Date = log.logDate;
       if (!d || isNaN(d.getTime())) return false;
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === month;
     });
   });
+
+  missingStockCount = computed(() => this.stockLogs().filter(log => log.isMissingStock).length);
 
   selectedMonthLabel = computed(() => {
     const month = this.selectedMonth();
@@ -95,6 +98,10 @@ export class StockLog implements OnInit {
     this.selectedMonth.set(value);
   }
 
+  toggleMissingOnly() {
+    this.showMissingOnly.set(!this.showMissingOnly());
+  }
+
   async ngOnInit() {
     try {
       this.isLoading.set(true);
@@ -111,6 +118,7 @@ export class StockLog implements OnInit {
           product_id: log.product_id,
           product: (log.products as any)?.product_name || 'Unknown Product',
           quantity: Math.abs(log.quantity || 0),
+          signedQuantity: Number(log.quantity || 0),
           type: log.change_type,
           logDate: new Date(log.log_date || Date.now()),
           date: new Date(log.log_date || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
@@ -127,7 +135,10 @@ export class StockLog implements OnInit {
           }
           return {
             ...log,
-            available_quantity: log.quantity - returnedQty
+            available_quantity: log.quantity - returnedQty,
+            // A negative ADJUST is the warehouse's recorded stock variance or
+            // loss and is surfaced by the Missing Stock filter.
+            isMissingStock: log.type === 'ADJUST' && log.signedQuantity < 0
           };
         }));
       }
