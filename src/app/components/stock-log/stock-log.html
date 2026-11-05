@@ -40,6 +40,12 @@
       </div>
     </div>
 
+    @if (errorMessage()) {
+      <div class="mb-5 bg-red-50 text-red-700 px-4 py-3 rounded-xl text-xs border border-red-200">
+        {{ errorMessage() }}
+      </div>
+    }
+
     <!-- Table Header -->
     <div class="grid grid-cols-7 text-xs font-semibold text-gray-400 uppercase tracking-widest pb-4 px-4 border-b border-gray-200">
       <div class="col-span-1">Product</div>

@@ -136,9 +136,10 @@ export class StockLog implements OnInit {
           return {
             ...log,
             available_quantity: log.quantity - returnedQty,
-            // A negative ADJUST is the warehouse's recorded stock variance or
-            // loss and is surfaced by the Missing Stock filter.
-            isMissingStock: log.type === 'ADJUST' && log.signedQuantity < 0
+            // The adjustment RPC stores quantity as a positive magnitude. The
+            // service marks negative adjustments in the reason before calling it.
+            isMissingStock: log.type === 'ADJUST'
+              && log.remarks.startsWith('[MISSING STOCK]')
           };
         }));
       }

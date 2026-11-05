@@ -425,11 +425,15 @@ export class InventoryLogicService {
     quantity: number,
     reason: string
   ): Promise<StockAdjustmentResult> {
+    const recordedReason = changeType === 'ADJUST' && quantity < 0
+      ? `[MISSING STOCK] ${reason}`
+      : reason;
+
     const { data, error } = await this.supabaseService.client.rpc('record_stock_adjustment', {
       p_product_id: productId,
       p_change_type: changeType,
       p_quantity: quantity,
-      p_reason: reason
+      p_reason: recordedReason
     });
 
     if (error) throw error;
